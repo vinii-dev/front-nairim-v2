@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login', '/forgot-password', '/register'];
+const PUBLIC_ROUTES = ['/login', '/forgot-password', '/register', '/'];
 const DEFAULT_PRIVATE_ROUTE = '/dashboard';
 
 export function middleware(request: NextRequest) {

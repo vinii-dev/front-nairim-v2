@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMessageContext } from '@/contexts/MessageContext';
 import DynamicFormManager from '@/components/DynamicFormManager';
@@ -15,13 +15,19 @@ import {
   Building as BuildingIcon, Smartphone
 } from 'lucide-react';
 
-export default function CadastrarProprietarioPage() {
+type Props = {
+  searchParams: Promise<{
+    tipo?: OwnerType;
+  }>;
+};
+
+export default function CadastrarProprietarioPage({ searchParams }: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const params = use(searchParams);
   const { showMessage } = useMessageContext();
   
   // Verificar se o tipo foi selecionado via query params
-  const tipoParam = searchParams.get('tipo') as OwnerType;
+  const tipoParam = params.tipo;
   const [tipoSelecionado, setTipoSelecionado] = useState<OwnerType | null>(null);
 
   useEffect(() => {

@@ -18,11 +18,6 @@ import {
 export default function InquilinoFormPage() {
   const params = useParams();
   const id = params.id as string | undefined;
-  
-  // Determinar o modo baseado na rota
-  const pathname = window.location.pathname;
-  const mode = pathname.includes('/visualizar/') ? 'view' : 
-              pathname.includes('/editar/') ? 'edit' : 'create';
 
   const { showMessage } = useMessageContext();
   const router = useRouter();
@@ -126,7 +121,6 @@ export default function InquilinoFormPage() {
 
       const API_URL = process.env.NEXT_PUBLIC_URL_API;
       
-      if (mode === 'create') {
         const response = await fetch(`${API_URL}/tenants`, {
           method: 'POST',
           headers: {
@@ -158,39 +152,7 @@ export default function InquilinoFormPage() {
         }
 
         return result;
-      } else if (mode === 'edit' && id) {
-        const response = await fetch(`${API_URL}/tenants/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(formattedData),
-        });
 
-        const responseText = await response.text();
-        console.log('📥 Resposta da edição:', response.status, responseText);
-
-        let result;
-        try {
-          result = JSON.parse(responseText);
-        } catch (e) {
-          throw new Error('Resposta inválida do servidor');
-        }
-
-        if (!response.ok) {
-          if (response.status === 409) {
-            if (result.message?.includes('CPF')) {
-              throw new Error('CPF já cadastrado para outro inquilino');
-            }
-            if (result.message?.includes('CNPJ')) {
-              throw new Error('CNPJ já cadastrado para outro inquilino');
-            }
-          }
-          throw new Error(result.message || `Erro ${response.status}`);
-        }
-
-        return result;
-      }
 
     } catch (error: any) {
       console.error('❌ Erro no submit:', error);
@@ -425,7 +387,7 @@ export default function InquilinoFormPage() {
   ], []);
 
   const onSubmitSuccess = (data: any) => {
-    const message = mode === 'create' ? 'Inquilino criado com sucesso!' : 'Inquilino atualizado com sucesso!';
+    const message = 'Inquilino criado com sucesso!';
     showMessage(message, 'success');
     router.push('/dashboard/inquilinos');
   };
@@ -435,7 +397,7 @@ export default function InquilinoFormPage() {
       resource="tenants"
       title="Inquilino"
       basePath="/dashboard/inquilinos"
-      mode={mode}
+      mode={'create'}
       id={id}
       steps={steps}
       onSubmit={handleSubmit}

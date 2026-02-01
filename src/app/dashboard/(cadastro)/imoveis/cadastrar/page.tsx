@@ -1,0 +1,736 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// app/dashboard/imoveis/cadastrar/page.tsx
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import DynamicFormManager from '@/components/DynamicFormManager';
+import { FormStep } from '@/types/types';
+import { useMessageContext } from '@/contexts/MessageContext';
+import { useRouter } from 'next/navigation';
+import { 
+  Home, MapPin, DollarSign, Upload, Building2, 
+  Key, FileText, BedDouble, Bath, Car, Ruler, Sofa,
+  HomeIcon, User, Building, DollarSign as Dollar,
+  Calendar, File,
+  MapPinIcon,
+  Hash,
+  Globe
+} from 'lucide-react';
+
+const parseMetric = (value: string) => {
+  if (!value) return 0;
+  const cleaned = value.replace(' m²', '').replace(' m', '').replace(/\./g, '').replace(',', '.');
+  return parseFloat(cleaned) || 0;
+};
+
+const parseMoney = (value: string) => {
+  if (!value) return 0;
+  
+  const cleaned = value
+    .replace('R$', '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .trim();
+    
+  const parsed = parseFloat(cleaned);
+  
+  if (isNaN(parsed)) {
+    console.warn(`Valor monetário inválido: ${value}`);
+    return 0;
+  }
+  
+  return parsed;
+};
+
+export default function CadastrarImovelPage() {
+  const { user } = useAuth();
+  const { showMessage } = useMessageContext();
+  const router = useRouter();
+  
+  const [owners, setOwners] = useState<any[]>([]);
+  const [propertyTypes, setPropertyTypes] = useState<any[]>([]);
+  const [agencies, setAgencies] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+
+  // Buscar dados para selects
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const [ownersRes, typesRes, agenciesRes] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_URL_API}/owners`),
+          fetch(`${process.env.NEXT_PUBLIC_URL_API}/property-types`),
+          fetch(`${process.env.NEXT_PUBLIC_URL_API}/agencies`),
+        ]);
+
+        if (!ownersRes.ok || !typesRes.ok || !agenciesRes.ok) {
+          throw new Error('Erro ao buscar dados iniciais');
+        }
+
+        const ownersData = await ownersRes.json();
+        const typesData = await typesRes.json();
+        const agenciesData = await agenciesRes.json();
+
+        const ownersList = ownersData.data || ownersData || [];
+        const typesList = typesData.data || typesData || [];
+        const agenciesList = agenciesData.data || agenciesData || [];
+
+        setOwners(ownersList);
+        setPropertyTypes(typesList);
+        setAgencies(agenciesList);
+      } catch (error) {
+        console.error('Erro ao buscar dados:', error);
+        showMessage('Erro ao carregar dados iniciais', 'error');
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [showMessage]);
+
+  // Handler para mudança de campo - CEP
+  const handleFieldChange = async (fieldName: string, value: any) => {
+    console.log('handleFieldChange:', fieldName, value);
+    
+    if (fieldName === 'zip_code' && value) {
+      const cleanCEP = value.replace(/\D/g, '');
+      
+      if (cleanCEP.length === 8) {
+        try {
+          showMessage('Buscando CEP...', 'info');
+          
+          const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          
+          if (data.error) {
+            showMessage(data.error, 'error');
+            return {
+              street: '',
+              district: '',
+              city: '',
+              state: '',
+              country: 'Brasil',
+            };
+          } else {
+            showMessage('Endereço preenchido automaticamente!', 'success');
+            
+            return {
+              street: data.logradouro || '',
+              district: data.bairro || '',
+              city: data.localidade || '',
+              state: data.uf || '',
+              country: data.pais || 'Brasil',
+            };
+          }
+        } catch (error: any) {
+          console.error('Erro ao buscar CEP:', error);
+          showMessage(error.message || 'Erro ao buscar CEP. Tente novamente.', 'error');
+          return null;
+        }
+      } else if (cleanCEP.length < 8) {
+        return {
+          street: '',
+          district: '',
+          city: '',
+          state: '',
+          country: 'Brasil',
+        };
+      }
+    }
+    return null;
+  };
+
+  // Função para validar um step
+  const validateStep = (stepIndex: number, data: any): boolean => {
+    const stepFields = steps[stepIndex].fields;
+    
+    for (const field of stepFields) {
+      if (field.required) {
+        const value = data[field.field];
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  };
+
+  const steps: FormStep[] = useMemo(() => [
+    {
+      title: 'Dados do Imóvel',
+      icon: <Home size={20} />,
+      fields: [
+        {
+          field: 'title',
+          label: 'Nome Fantasia',
+          type: 'text',
+          required: true,
+          placeholder: 'Nome para o imóvel',
+          autoFocus: true,
+          icon: <HomeIcon size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'bedrooms',
+          label: 'Quartos',
+          type: 'number',
+          required: true,
+          placeholder: 'Quantidade de quartos',
+          showIncrementButtons: true,
+          min: 0,
+          icon: <BedDouble size={20} />,
+        },
+        {
+          field: 'bathrooms',
+          label: 'Banheiros',
+          type: 'number',
+          required: true,
+          placeholder: 'Quantidade de banheiros',
+          showIncrementButtons: true,
+          min: 0,
+          icon: <Bath size={20} />,
+        },
+        {
+          field: 'half_bathrooms',
+          label: 'Lavabos',
+          type: 'number',
+          required: true,
+          placeholder: 'Quantidade de lavabos',
+          showIncrementButtons: true,
+          min: 0,
+          icon: <Bath size={20} />,
+        },
+        {
+          field: 'garage_spaces',
+          label: 'Vagas na Garagem',
+          type: 'number',
+          required: true,
+          placeholder: 'Quantidade de vagas',
+          showIncrementButtons: true,
+          min: 0,
+          icon: <Car size={20} />,
+        },
+        {
+          field: 'floor_number',
+          label: 'Número do Andar',
+          type: 'number',
+          required: true,
+          placeholder: 'Número do andar',
+          showIncrementButtons: true,
+          min: 0,
+          icon: <Building size={20} />,
+        },
+        {
+          field: 'area_total',
+          label: 'Área Total (m²)',
+          type: 'text',
+          required: true,
+          placeholder: 'Área total em m²',
+          mask: 'metros2',
+          icon: <Ruler size={20} />,
+        },
+        {
+          field: 'area_built',
+          label: 'Área Construída (m²)',
+          type: 'text',
+          required: true,
+          placeholder: 'Área construída em m²',
+          mask: 'metros2',
+          icon: <Ruler size={20} />,
+        },
+        {
+          field: 'frontage',
+          label: 'Testada (m)',
+          type: 'text',
+          required: true,
+          placeholder: 'Testada em metros',
+          mask: 'metros',
+          icon: <Ruler size={20} />,
+        },
+        {
+          field: 'tax_registration',
+          label: 'Registro Fiscal',
+          type: 'text',
+          required: true,
+          placeholder: 'Número do registro fiscal',
+          icon: <FileText size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'owner_id',
+          label: 'Proprietário',
+          type: 'select',
+          required: true,
+          options: loadingData 
+            ? [{ label: 'Carregando...', value: '' }]
+            : owners.map((owner) => ({ 
+                label: owner.name || owner.trade_name || owner.legal_name || 'Sem nome', 
+                value: owner.id 
+              })),
+          icon: <User size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'type_id',
+          label: 'Tipo do imóvel',
+          type: 'select',
+          required: true,
+          options: loadingData 
+            ? [{ label: 'Carregando...', value: '' }]
+            : propertyTypes.map((type) => ({ 
+                label: type.description || type.name || 'Sem descrição', 
+                value: type.id 
+              })),
+          icon: <Building2 size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'agency_id',
+          label: 'Imobiliária',
+          type: 'select',
+          required: true,
+          options: loadingData 
+            ? [{ label: 'Carregando...', value: '' }]
+            : agencies.map((agency) => ({ 
+                label: agency.trade_name || agency.legal_name || agency.name || 'Sem nome', 
+                value: agency.id 
+              })),
+          icon: <Building size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'furnished',
+          label: 'Mobiliado',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'Sim', value: 'true' },
+            { label: 'Não', value: 'false' },
+          ],
+          icon: <Sofa size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'notes',
+          label: 'Observações',
+          type: 'textarea',
+          placeholder: 'Escreva detalhes não especificados anteriormente',
+          rows: 3,
+          icon: <FileText size={20} />,
+          className: 'col-span-full',
+        },
+      ],
+    },
+    {
+      title: 'Endereço',
+      icon: <MapPin size={20} />,
+      fields: [
+        {
+          field: 'zip_code',
+          label: 'CEP',
+          type: 'text',
+          required: true,
+          placeholder: '00000-000',
+          mask: 'cep',
+          icon: <MapPinIcon size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'street',
+          label: 'Rua',
+          type: 'text',
+          required: true,
+          placeholder: 'Rua das Flores',
+          icon: <MapPinIcon size={20} />,
+          disabled: true,
+          readOnly: true,
+          className: 'col-span-full',
+        },
+        {
+          field: 'number',
+          label: 'Número',
+          type: 'text',
+          required: true,
+          placeholder: '123',
+          icon: <Hash size={20} />,
+        },
+        {
+          field: 'district',
+          label: 'Bairro',
+          type: 'text',
+          required: true,
+          placeholder: 'Centro',
+          icon: <MapPinIcon size={20} />,
+          disabled: true,
+          readOnly: true,
+        },
+        {
+          field: 'city',
+          label: 'Cidade',
+          type: 'text',
+          required: true,
+          placeholder: 'São Paulo',
+          icon: <MapPinIcon size={20} />,
+          disabled: true,
+          readOnly: true,
+        },
+        {
+          field: 'state',
+          label: 'Estado',
+          type: 'text',
+          required: true,
+          placeholder: 'SP',
+          icon: <Globe size={20} />,
+          disabled: true,
+          readOnly: true,
+        },
+        {
+          field: 'country',
+          label: 'País',
+          type: 'text',
+          required: true,
+          placeholder: 'Brasil',
+          defaultValue: 'Brasil',
+          icon: <Globe size={20} />,
+          disabled: true,
+          readOnly: true,
+        }
+      ],
+    },
+    {
+      title: 'Valores e Condições',
+      icon: <DollarSign size={20} />,
+      fields: [
+        {
+          field: 'purchase_value',
+          label: 'Valor do Imóvel (Compra)',
+          type: 'text',
+          required: true,
+          placeholder: 'R$ 500.000,00',
+          mask: 'money',
+          icon: <Dollar size={20} />,
+        },
+        {
+          field: 'rental_value',
+          label: 'Valor Aluguel',
+          type: 'text',
+          required: true,
+          placeholder: 'R$ 3.000,00',
+          mask: 'money',
+          icon: <Key size={20} />,
+        },
+        {
+          field: 'condo_fee',
+          label: 'Valor Condomínio',
+          type: 'text',
+          required: true,
+          placeholder: 'R$ 500,00',
+          mask: 'money',
+          icon: <Building size={20} />,
+        },
+        {
+          field: 'property_tax',
+          label: 'Valor IPTU',
+          type: 'text',
+          required: true,
+          placeholder: 'R$ 200,00',
+          mask: 'money',
+          icon: <FileText size={20} />,
+        },
+        {
+          field: 'status',
+          label: 'Status Atual',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'Disponível', value: 'AVAILABLE' },
+            { label: 'Ocupado', value: 'OCCUPIED' },
+          ],
+          icon: <Key size={20} />,
+        },
+        {
+          field: 'reference_date',
+          label: 'Data de Referência',
+          type: 'date',
+          required: true,
+          icon: <Calendar size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'sale_value',
+          label: 'Valor de Venda',
+          type: 'text',
+          placeholder: 'R$ 600.000,00',
+          mask: 'money',
+          icon: <Dollar size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'extra_charges',
+          label: 'Encargos / Custos Extras',
+          type: 'text',
+          placeholder: 'R$ 0,00',
+          mask: 'money',
+          icon: <Dollar size={20} />,
+          className: 'col-span-full',
+        },
+        {
+          field: 'values_notes',
+          label: 'Observações',
+          type: 'textarea',
+          placeholder: 'Anotações adicionais sobre os valores',
+          rows: 3,
+          icon: <FileText size={20} />,
+          className: 'col-span-full',
+        },
+      ],
+    },
+    {
+      title: 'Mídias',
+      icon: <Upload size={20} />,
+      fields: [
+        {
+          field: 'arquivosImagens',
+          label: 'Imagens',
+          type: 'file',
+          accept: 'image/*',
+          multiple: true,
+          textButton: 'Selecionar Imagens',
+          placeholder: 'Nenhum arquivo selecionado',
+          icon: <Upload size={20} />,
+          className: 'col-span-full block w-full h-full',
+          maxFiles: 20,
+        },
+        {
+          field: 'arquivosMatricula',
+          label: 'Matrícula',
+          type: 'file',
+          accept: '.pdf',
+          multiple: false,
+          textButton: 'Escolher arquivos',
+          className: 'flex-1 w-full',
+          placeholder: 'Nenhum arquivo selecionado',
+          icon: <File size={20} />,
+        },
+        {
+          field: 'arquivosRegistro',
+          label: 'Registro',
+          type: 'file',
+          accept: '.pdf',
+          multiple: false,
+          textButton: 'Escolher arquivos',
+          className: 'flex-1 w-full',
+          placeholder: 'Nenhum arquivo selecionado',
+          icon: <FileText size={20} />,
+        },
+        {
+          field: 'arquivosEscritura',
+          label: 'Escritura',
+          type: 'file',
+          accept: '.pdf',
+          multiple: false,
+          textButton: 'Escolher arquivos',
+          className: 'flex-1 w-full',
+          placeholder: 'Nenhum arquivo selecionado',
+          icon: <FileText size={20} />,
+        }
+      ],
+    },
+  ], [owners, propertyTypes, agencies, loadingData]);
+
+  // Handler de submit ATUALIZADO para usar o novo endpoint unificado
+  const handleSubmit = async (data: any) => {
+    try {
+      // Criar FormData para enviar tudo junto
+      const formData = new FormData();
+      
+      // Separar dados em 3 objetos JSON como o novo endpoint ESPERA EXATAMENTE
+      const propertyData = {
+        title: data.title,
+        bedrooms: parseInt(data.bedrooms) || 0,
+        bathrooms: parseInt(data.bathrooms) || 0,
+        half_bathrooms: parseInt(data.half_bathrooms) || 0,
+        garage_spaces: parseInt(data.garage_spaces) || 0,
+        area_total: parseMetric(data.area_total),
+        area_built: parseMetric(data.area_built),
+        frontage: parseMetric(data.frontage),
+        furnished: data.furnished === 'true',
+        floor_number: parseInt(data.floor_number) || 0,
+        tax_registration: data.tax_registration,
+        notes: data.notes,
+        owner_id: data.owner_id,
+        type_id: data.type_id,
+        agency_id: data.agency_id,
+      };
+
+      const addressData = {
+        zip_code: data.zip_code,
+        street: data.street,
+        number: data.number,
+        district: data.district,
+        city: data.city,
+        state: data.state,
+        country: data.country || 'Brasil',
+      };
+
+      const valuesData = {
+        purchase_value: parseMoney(data.purchase_value),
+        rental_value: parseMoney(data.rental_value),
+        condo_fee: parseMoney(data.condo_fee),
+        property_tax: parseMoney(data.property_tax),
+        status: data.status,
+        notes: data.values_notes,
+        reference_date: data.reference_date || new Date().toISOString().split('T')[0],
+        sale_value: parseMoney(data.sale_value) || 0,
+        extra_charges: parseMoney(data.extra_charges) || 0,
+      };
+
+      console.log('📊 Dados preparados:', {
+        propertyData,
+        addressData,
+        valuesData,
+        userId: user?.id || ''
+      });
+
+      // Adicionar dados como JSON string (EXATAMENTE como o endpoint espera)
+      formData.append('propertyData', JSON.stringify(propertyData));
+      formData.append('addressData', JSON.stringify(addressData));
+      formData.append('valuesData', JSON.stringify(valuesData));
+      formData.append('userId', user?.id || '');
+
+      // Adicionar arquivos (certifique-se de que os nomes estão CORRETOS)
+      if (data.arquivosImagens?.length > 0) {
+        Array.from(data.arquivosImagens).forEach((file: any) => {
+          formData.append('arquivosImagens', file);
+        });
+      }
+      
+      if (data.arquivosMatricula?.length > 0) {
+        Array.from(data.arquivosMatricula).forEach((file: any) => {
+          formData.append('arquivosMatricula', file);
+        });
+      }
+      
+      if (data.arquivosRegistro?.length > 0) {
+        Array.from(data.arquivosRegistro).forEach((file: any) => {
+          formData.append('arquivosRegistro', file);
+        });
+      }
+      
+      if (data.arquivosEscritura?.length > 0) {
+        Array.from(data.arquivosEscritura).forEach((file: any) => {
+          formData.append('arquivosEscritura', file);
+        });
+      }
+      
+      if (data.arquivosOutros?.length > 0) {
+        Array.from(data.arquivosOutros).forEach((file: any) => {
+          formData.append('arquivosOutros', file);
+        });
+      }
+
+      console.log('📤 Enviando para o endpoint unificado...');
+      
+      const API_URL = process.env.NEXT_PUBLIC_URL_API;
+      
+      // ✅ USAR O NOVO ENDPOINT UNIFICADO
+      const createRes = await fetch(`${API_URL}/properties/create-unified`, {
+        method: 'POST',
+        body: formData,
+        // NÃO definir Content-Type - o browser fará isso automaticamente
+      });
+
+      console.log('📥 Resposta recebida:', createRes.status, createRes.statusText);
+
+      const responseText = await createRes.text();
+      console.log('📄 Conteúdo da resposta:', responseText);
+
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error('❌ Erro ao fazer parse da resposta:', e);
+        throw new Error('Resposta inválida do servidor');
+      }
+
+      if (!createRes.ok) {
+        console.error('❌ Erro da API:', result);
+        
+        if (createRes.status === 400 && result.errors) {
+          const validationErrors = Object.entries(result.errors)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('; ');
+          throw new Error(`Erros de validação: ${validationErrors}`);
+        }
+        
+        throw new Error(result.message || `Erro ${createRes.status}: ${responseText}`);
+      }
+
+      if (!result.success) {
+        throw new Error(result.message || 'Erro desconhecido ao criar imóvel');
+      }
+
+      return result.data || result;
+
+    } catch (error: any) {
+      console.error('❌ Erro no handleSubmit:', error);
+      throw new Error(`Erro ao criar imóvel: ${error.message}`);
+    }
+  };
+
+  const handleStepComplete = (stepIndex: number) => {
+    if (!completedSteps.includes(stepIndex)) {
+      setCompletedSteps(prev => [...prev, stepIndex]);
+    }
+  };
+
+  const canNavigateToStep = (targetStep: number, currentStep: number, data: any): boolean => {
+    // Sempre permite voltar
+    if (targetStep < currentStep) return true;
+    
+    // Para avançar, verifica se o step atual é válido
+    if (targetStep > currentStep) {
+      return validateStep(currentStep, data);
+    }
+    
+    return true;
+  };
+
+  const onSubmitSuccess = (_data: any) => {
+    showMessage('Imóvel criado com sucesso!', 'success');
+    router.push('/dashboard/imoveis');
+  };
+
+  if (loadingData) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <DynamicFormManager
+      resource="properties"
+      title="Imóvel"
+      basePath="/dashboard/imoveis"
+      mode="create"
+      steps={steps}
+      onSubmit={handleSubmit}
+      onSubmitSuccess={onSubmitSuccess}
+      onFieldChange={handleFieldChange}
+      completedSteps={completedSteps}
+      onStepComplete={handleStepComplete}
+      canNavigateToStep={canNavigateToStep}
+    />
+  );
+}

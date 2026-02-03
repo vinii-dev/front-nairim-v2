@@ -2,10 +2,12 @@
 
 import { Icon } from "@iconify/react";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { propertyService } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 interface ApartamentoProps {
-    id: number;
+    id: string;
     nome: string;
     local: string;
     preco: number;
@@ -16,17 +18,231 @@ interface ApartamentoProps {
     mobilia: boolean;
     andar: number;
     condominio: boolean;
+    status: string;
+    imagem?: string;
+    cidade: string;
+    tipo: string;
 }
 
-const apartamentosExemplo: ApartamentoProps[] = [
-    { id: 1, nome: "Apartamento Moderno", local: "Alphaville, Barueri", preco: 4500, quartos: 3, banheiros: 2, vagas: 2, area: 120, mobilia: true, andar: 12, condominio: true },
-    { id: 2, nome: "Apartamento Alto Padrão", local: "Morumbi, São Paulo", preco: 6800, quartos: 4, banheiros: 3, vagas: 3, area: 180, mobilia: false, andar: 8, condominio: true },
-    { id: 3, nome: "Apartamento com Vista", local: "Moema, São Paulo", preco: 5200, quartos: 2, banheiros: 2, vagas: 1, area: 85, mobilia: true, andar: 15, condominio: false },
-    { id: 4, nome: "Apartamento de Condomínio", local: "Jardins, São Paulo", preco: 7500, quartos: 3, banheiros: 3, vagas: 2, area: 150, mobilia: true, andar: 5, condominio: true },
-];
-
 export default function ApartamentosLocacao() {
-    const [apartamentos] = useState<ApartamentoProps[]>(apartamentosExemplo);
+    const [apartamentos, setApartamentos] = useState<ApartamentoProps[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const router = useRouter();
+    
+    const itemsPerPage = 8;
+
+    // Função para buscar propriedades da API
+    const fetchProperties = async (page: number = 1) => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            console.log(`Buscando apartamentos - Página ${page}...`);
+            
+            const filters = {
+                page,
+                limit: itemsPerPage,
+                status: "AVAILABLE",
+                property_type: "apartment", // Filtro específico para apartamentos
+            };
+            
+            console.log("Filtros aplicados:", filters);
+            
+            const response = await propertyService.getAllProperties(filters);
+            
+            console.log("Resposta completa da API:", response);
+            console.log("Tipo de response:", typeof response);
+            console.log("É array?", Array.isArray(response));
+            
+            // Verifica se a resposta é um array ou se tem uma propriedade data que é um array
+            let propertiesArray: any[] = [];
+            
+            if (Array.isArray(response)) {
+                // Se a resposta já é um array
+                propertiesArray = response;
+            } else if (response && Array.isArray(response.data)) {
+                // Se a resposta tem uma propriedade data que é array
+                propertiesArray = response.data;
+            } else if (response && response.data && typeof response.data === 'object') {
+                // Se data é um objeto, pode ser que as propriedades estejam em uma chave diferente
+                // Vamos tentar encontrar qualquer array dentro do objeto
+                for (const key in response.data) {
+                    if (Array.isArray(response.data[key])) {
+                        propertiesArray = response.data[key];
+                        console.log(`Encontrado array na chave: ${key}`, propertiesArray);
+                        break;
+                    }
+                }
+            }
+            
+            console.log("Array de propriedades encontrado:", propertiesArray);
+            
+            // Se ainda não encontrou um array, tenta usar a resposta diretamente se for um objeto único
+            if (!Array.isArray(propertiesArray) || propertiesArray.length === 0) {
+                if (response && typeof response === 'object' && !Array.isArray(response)) {
+                    // Se a resposta for um único objeto, coloca em um array
+                    propertiesArray = [response];
+                } else if (response && response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+                    // Se data for um único objeto
+                    propertiesArray = [response.data];
+                }
+            }
+            
+            // Verifica se há dados
+            if (!Array.isArray(propertiesArray) || propertiesArray.length === 0) {
+                console.warn("Nenhuma propriedade encontrada ou formato inesperado");
+                setApartamentos([]);
+                setTotalPages(response?.totalPages || 1);
+                return;
+            }
+            
+            // Mapeia os dados da API para o formato do componente
+            const mappedApartamentos = propertiesArray.map((property: any) => {
+                // Debug da estrutura da propriedade
+                console.log("Propriedade recebida:", property);
+                
+                // Tenta pegar a primeira imagem
+                let imagem = "/CasasLocacao.jpg";
+                if (property.documents && Array.isArray(property.documents) && property.documents.length > 0) {
+                    const imageDoc = property.documents.find((doc: any) => 
+                        (doc.type === 'IMAGE' || (doc.filename && doc.filename.match(/\.(jpg|jpeg|png|webp)$/i)))
+                    );
+                    if (imageDoc && imageDoc.url) {
+                        imagem = imageDoc.url;
+                    }
+                }
+                
+                // Tenta obter os valores da propriedade
+                let rentalValue = 0;
+                let propertyStatus = "UNKNOWN";
+                let condoFee = 0;
+                
+                if (property.values) {
+                    rentalValue = property.values.rental_value || 0;
+                    propertyStatus = property.values.status || "UNKNOWN";
+                    condoFee = property.values.condo_fee || 0;
+                } else if (property.rental_value !== undefined) {
+                    rentalValue = property.rental_value;
+                }
+                
+                // Tenta obter o endereço
+                let street = "", number = "", district = "", city = "", state = "";
+                if (property.address) {
+                    street = property.address.street || "";
+                    number = property.address.number || "";
+                    district = property.address.district || "";
+                    city = property.address.city || "";
+                    state = property.address.state || "";
+                }
+                
+                // Obtém tipo da propriedade
+                let tipo = "Apartamento";
+                if (property.type?.description) {
+                    tipo = property.type.description;
+                } else if (property.property_type) {
+                    tipo = property.property_type;
+                }
+                
+                return {
+                    id: property.id || `apart-${Math.random()}`,
+                    nome: property.title || property.name || "Sem título",
+                    local: `${street}, ${number} - ${district}, ${city} - ${state}`,
+                    preco: rentalValue,
+                    quartos: property.bedrooms || 0,
+                    banheiros: (property.bathrooms || 0) + (property.half_bathrooms || 0),
+                    vagas: property.garage_spaces || 0,
+                    area: property.area_total || property.area_built || property.area || 0,
+                    mobilia: property.furnished || false,
+                    andar: property.floor_number || 0,
+                    condominio: condoFee > 0 || Boolean(property.condominio),
+                    status: propertyStatus,
+                    imagem: imagem,
+                    cidade: city || "Não informada",
+                    tipo: tipo,
+                };
+            });
+            
+            console.log("Apartamentos mapeados:", mappedApartamentos);
+            
+            setApartamentos(mappedApartamentos);
+            setTotalPages(response?.totalPages || 1);
+            setCurrentPage(response?.page || page);
+        } catch (err) {
+            console.error("Erro ao buscar apartamentos:", err);
+            setError(err instanceof Error ? err.message : "Erro ao conectar com a API");
+            
+            // Dados de exemplo em caso de erro (mesmo padrão do CasasLocacao)
+            setApartamentos([
+                { id: "1", nome: "Apartamento Moderno", local: "Alphaville, Barueri", preco: 4500, quartos: 3, banheiros: 2, vagas: 2, area: 120, mobilia: true, andar: 12, condominio: true, status: "AVAILABLE", cidade: "Barueri", tipo: "Apartamento" },
+                { id: "2", nome: "Apartamento Alto Padrão", local: "Morumbi, São Paulo", preco: 6800, quartos: 4, banheiros: 3, vagas: 3, area: 180, mobilia: false, andar: 8, condominio: true, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
+                { id: "3", nome: "Apartamento com Vista", local: "Moema, São Paulo", preco: 5200, quartos: 2, banheiros: 2, vagas: 1, area: 85, mobilia: true, andar: 15, condominio: false, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
+                { id: "4", nome: "Apartamento de Condomínio", local: "Jardins, São Paulo", preco: 7500, quartos: 3, banheiros: 3, vagas: 2, area: 150, mobilia: true, andar: 5, condominio: true, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
+                { id: "5", nome: "Apartamento Compacto", local: "Pinheiros, São Paulo", preco: 3800, quartos: 1, banheiros: 1, vagas: 1, area: 65, mobilia: true, andar: 3, condominio: true, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
+                { id: "6", nome: "Apartamento Duplex", local: "Brooklin, São Paulo", preco: 8500, quartos: 3, banheiros: 3, vagas: 2, area: 140, mobilia: false, andar: 7, condominio: true, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
+                { id: "7", nome: "Apartamento com Varanda", local: "Vila Olímpia, São Paulo", preco: 6200, quartos: 2, banheiros: 2, vagas: 1, area: 95, mobilia: true, andar: 10, condominio: true, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
+                { id: "8", nome: "Apartamento Novo", local: "Itaim Bibi, São Paulo", preco: 7100, quartos: 3, banheiros: 2, vagas: 2, area: 110, mobilia: false, andar: 6, condominio: true, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
+            ]);
+            setTotalPages(1);
+            setCurrentPage(1);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Busca propriedades quando o componente monta
+    useEffect(() => {
+        fetchProperties(1);
+    }, []);
+
+    // Função para mudar de página
+    const handlePageChange = (newPage: number) => {
+        if (newPage >= 1 && newPage <= totalPages) {
+            setCurrentPage(newPage);
+            fetchProperties(newPage);
+        }
+    };
+
+    // Função para lidar com ver detalhes
+    const handleVerDetalhes = (apartamentoId: string) => {
+        router.push(`/apartamentos/${apartamentoId}`);
+    };
+
+    // Loading skeleton
+    if (loading && apartamentos.length === 0) {
+        return (
+            <div className="w-full py-8">
+                <div className="container mx-auto px-4">
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-800 mb-2">Apartamentos para Locação</h1>
+                        <p className="text-gray-600">Encontre o apartamento ideal para você</p>
+                    </div>
+                    
+                    {/* Grid Skeleton */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {[...Array(4)].map((_, index) => (
+                            <div key={index} className="bg-white rounded-xl shadow-lg overflow-hidden animate-pulse">
+                                <div className="h-48 bg-gray-300"></div>
+                                <div className="p-5">
+                                    <div className="h-6 bg-gray-300 rounded mb-4"></div>
+                                    <div className="h-4 bg-gray-300 rounded mb-6"></div>
+                                    <div className="h-8 bg-gray-300 rounded mb-6"></div>
+                                    <div className="grid grid-cols-4 gap-4 py-4 mb-4">
+                                        {[...Array(4)].map((_, i) => (
+                                            <div key={i} className="h-16 bg-gray-300 rounded"></div>
+                                        ))}
+                                    </div>
+                                    <div className="h-10 bg-gray-300 rounded"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full py-8">
@@ -34,143 +250,276 @@ export default function ApartamentosLocacao() {
                 {/* Cabeçalho */}
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-800 mb-2">Apartamentos para Locação</h1>
-                    <p className="text-gray-600">Encontre o apartamento ideal para você</p>
+                    <p className="text-gray-600 mb-6">Encontre o apartamento ideal para você</p>
+                    
+                    {/* Mensagem de erro */}
+                    {error && (
+                        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-6">
+                            <div className="flex items-center">
+                                <Icon icon="mingcute:warning-line" className="w-5 h-5 mr-2" />
+                                <div>
+                                    <p className="font-medium">⚠️ Atenção</p>
+                                    <p className="text-sm">{error}</p>
+                                    <p className="text-xs mt-1">Mostrando dados de exemplo enquanto a API não está disponível.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Botão para testar a API manualmente */}
+                    <div className="mb-4 flex gap-4">
+                        <button
+                            onClick={() => fetchProperties(1)}
+                            className="px-4 py-2 bg-purple-900 text-white rounded-lg hover:bg-purple-800"
+                        >
+                            Recarregar Dados
+                        </button>
+                        <button
+                            onClick={() => {
+                                // Abre o console para debug
+                                if (typeof window !== 'undefined') {
+                                    console.log("Estado atual:", { apartamentos, loading, error, totalPages, currentPage });
+                                }
+                            }}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                        >
+                            Debug no Console
+                        </button>
+                    </div>
+                    
+                    {/* Contador de resultados */}
+                    <div className="flex justify-between items-center mb-4">
+                        <p className="text-gray-600">
+                            {apartamentos.length > 0 ? `${apartamentos.length} apartamentos encontrados` : 'Nenhum apartamento encontrado'}
+                        </p>
+                        {totalPages > 1 && (
+                            <p className="text-sm text-gray-500">
+                                Página {currentPage} de {totalPages}
+                            </p>
+                        )}
+                    </div>
                 </div>
 
                 {/* Grid de Apartamentos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {apartamentos.map((apartamento) => (
-                        <div key={apartamento.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-                            {/* Imagem com placeholder */}
-                            <div className="relative h-48 overflow-hidden">
-                                <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center">
-                                    <Image 
-                                        src="/CasasLocacao.jpg" 
-                                        alt={apartamento.nome}
-                                        fill
-                                        className="object-cover"
-                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                                    />
-                                </div>
-                                
-                                {/* Overlay e badges */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                                
-                                {/* Badge de condomínio - agora mostra "Condomínio" ou "Sem condomínio" */}
-                                <div className="absolute top-4 left-4 z-10">
-                                    <span className={`px-3 py-1 text-white text-xs font-medium rounded-full ${
-                                        apartamento.condominio ? "bg-blue-600" : "bg-gray-500"
-                                    }`}>
-                                        {apartamento.condominio ? "Condomínio" : "Sem condomínio"}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Conteúdo */}
-                            <div className="p-5 h-full flex flex-col">
-                                {/* Nome e Localização */}
-                                <div className="mb-4">
-                                    <h3 className="text-lg font-bold text-gray-800 mb-2">{apartamento.nome}</h3>
-                                    <div className="flex items-center gap-2 text-gray-600">
-                                        <Icon icon="mingcute:map-pin-line" className="w-4 h-4" />
-                                        <span className="text-sm">{apartamento.local}</span>
-                                    </div>
-                                </div>
-
-                                {/* Preço */}
-                                <div className="mb-4">
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-2xl font-bold text-purple-900">R$ {apartamento.preco.toLocaleString('pt-BR')}</span>
-                                        <span className="text-gray-500">/mês</span>
-                                    </div>
-                                    <div className="mt-1 flex gap-2">
-                                        {apartamento.mobilia ? (
-                                            <span className="inline-block px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded">
-                                                Mobiliado
-                                            </span>
+                {apartamentos.length > 0 ? (
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {apartamentos.map((apartamento) => (
+                                <div key={apartamento.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col">
+                                    {/* Imagem */}
+                                    <div className="relative h-48 overflow-hidden">
+                                        {apartamento.imagem ? (
+                                            <Image 
+                                                src={apartamento.imagem} 
+                                                alt={apartamento.nome}
+                                                fill
+                                                className="object-cover transition-transform duration-300 hover:scale-105"
+                                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                                                priority={false}
+                                            />
                                         ) : (
-                                            <span className="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                                                Não mobiliado
-                                            </span>
+                                            <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-purple-100 flex items-center justify-center">
+                                                <Icon icon="mingcute:building-2-line" className="w-16 h-16 text-purple-300" />
+                                            </div>
                                         )}
-                                        <span className="inline-block px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded">
-                                            {apartamento.andar}º andar
-                                        </span>
+                                        
+                                        {/* Badge de condomínio */}
+                                        <div className="absolute top-3 left-3">
+                                            <span className={`px-3 py-1 text-white text-xs rounded-full font-medium ${
+                                                apartamento.condominio ? "bg-blue-600" : "bg-gray-500"
+                                            }`}>
+                                                {apartamento.condominio ? "Condomínio" : "Sem condomínio"}
+                                            </span>
+                                        </div>
+                                        
+                                        {/* Badge de status */}
+                                        <div className="absolute top-3 right-3">
+                                            {apartamento.status === "AVAILABLE" ? (
+                                                <span className="px-3 py-1 bg-green-500 text-white text-xs rounded-full font-medium">
+                                                    Disponível
+                                                </span>
+                                            ) : apartamento.status === "RENTED" ? (
+                                                <span className="px-3 py-1 bg-blue-500 text-white text-xs rounded-full font-medium">
+                                                    Alugado
+                                                </span>
+                                            ) : apartamento.status === "SOLD" ? (
+                                                <span className="px-3 py-1 bg-red-500 text-white text-xs rounded-full font-medium">
+                                                    Vendido
+                                                </span>
+                                            ) : (
+                                                <span className="px-3 py-1 bg-gray-500 text-white text-xs rounded-full font-medium">
+                                                    {apartamento.status}
+                                                </span>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Overlay escuro */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
+                                    </div>
+
+                                    {/* Conteúdo */}
+                                    <div className="p-5 flex-grow flex flex-col">
+                                        {/* Nome e Localização */}
+                                        <div className="mb-4">
+                                            <h3 className="text-lg font-bold text-gray-800 mb-2 line-clamp-1">{apartamento.nome}</h3>
+                                            <div className="flex items-start gap-2 text-gray-600">
+                                                <Icon icon="mingcute:map-pin-line" className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                                <span className="text-sm line-clamp-2">{apartamento.local}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Preço */}
+                                        <div className="mb-4">
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-2xl font-bold text-purple-900">
+                                                    R$ {apartamento.preco.toLocaleString('pt-BR')}
+                                                </span>
+                                                <span className="text-gray-500">/mês</span>
+                                            </div>
+                                            <div className="mt-2 flex gap-2">
+                                                {apartamento.mobilia ? (
+                                                    <span className="inline-flex items-center px-3 py-1 bg-purple-50 text-purple-700 text-sm rounded-full">
+                                                        <Icon icon="mingcute:sofa-line" className="w-4 h-4 mr-1" />
+                                                        Mobiliado
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-600 text-sm rounded-full">
+                                                        <Icon icon="mingcute:sofa-line" className="w-4 h-4 mr-1" />
+                                                        Não mobiliado
+                                                    </span>
+                                                )}
+                                                <span className="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-full">
+                                                    <Icon icon="mingcute:building-line" className="w-4 h-4 mr-1" />
+                                                    {apartamento.andar}º andar
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Ícones de Características */}
+                                        <div className="grid grid-cols-4 gap-4 py-4 border-y border-gray-100 mb-4">
+                                            <div className="flex flex-col items-center">
+                                                <div className="p-2 bg-purple-50 rounded-lg mb-2">
+                                                    <Icon icon="mingcute:bed-line" className="w-5 h-5 text-purple-600" />
+                                                </div>
+                                                <span className="text-sm font-medium text-gray-800">{apartamento.quartos}</span>
+                                                <span className="text-xs text-gray-500">Quartos</span>
+                                            </div>
+
+                                            <div className="flex flex-col items-center">
+                                                <div className="p-2 bg-blue-50 rounded-lg mb-2">
+                                                    <Icon icon="mingcute:shower-line" className="w-5 h-5 text-blue-600" />
+                                                </div>
+                                                <span className="text-sm font-medium text-gray-800">{apartamento.banheiros}</span>
+                                                <span className="text-xs text-gray-500">Banheiros</span>
+                                            </div>
+
+                                            <div className="flex flex-col items-center">
+                                                <div className="p-2 bg-green-50 rounded-lg mb-2">
+                                                    <Icon icon="mingcute:car-line" className="w-5 h-5 text-green-600" />
+                                                </div>
+                                                <span className="text-sm font-medium text-gray-800">{apartamento.vagas}</span>
+                                                <span className="text-xs text-gray-500">Vagas</span>
+                                            </div>
+
+                                            <div className="flex flex-col items-center">
+                                                <div className="p-2 bg-yellow-50 rounded-lg mb-2">
+                                                    <Icon icon="mingcute:ruler-line" className="w-5 h-5 text-yellow-600" />
+                                                </div>
+                                                <span className="text-sm font-medium text-gray-800">{apartamento.area}m²</span>
+                                                <span className="text-xs text-gray-500">Área</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Botão de Ação */}
+                                        <div className="mt-auto">
+                                            <button 
+                                                onClick={() => handleVerDetalhes(apartamento.id)}
+                                                className="w-full py-3 bg-gradient-to-r from-purple-700 to-purple-900 text-white rounded-lg font-medium hover:from-purple-800 hover:to-purple-950 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                disabled={apartamento.status !== "AVAILABLE"}
+                                            >
+                                                {apartamento.status === "AVAILABLE" ? (
+                                                    <>
+                                                        <Icon icon="mingcute:eye-line" className="w-5 h-5" />
+                                                        Ver Detalhes
+                                                    </>
+                                                ) : (
+                                                    "Indisponível"
+                                                )}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
+                            ))}
+                        </div>
 
-                                {/* Ícones de Características */}
-                                <div className="grid grid-cols-4 gap-4 py-4 border-y border-gray-100 mb-4">
-                                    <div className="flex flex-col items-center">
-                                        <div className="p-2 bg-purple-50 rounded-lg mb-2">
-                                            <Icon icon="mingcute:bed-line" className="w-5 h-5 text-purple-600" />
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-500">{apartamento.quartos}</span>
-                                        <span className="text-xs text-gray-500">Quartos</span>
-                                    </div>
-
-                                    <div className="flex flex-col items-center">
-                                        <div className="p-2 bg-blue-50 rounded-lg mb-2">
-                                            <Icon icon="mingcute:shower-line" className="w-5 h-5 text-blue-600" />
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-500">{apartamento.banheiros}</span>
-                                        <span className="text-xs text-gray-500">Banheiros</span>
-                                    </div>
-
-                                    <div className="flex flex-col items-center">
-                                        <div className="p-2 bg-green-50 rounded-lg mb-2">
-                                            <Icon icon="mingcute:car-line" className="w-5 h-5 text-green-600" />
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-500">{apartamento.vagas}</span>
-                                        <span className="text-xs text-gray-500">Vagas</span>
-                                    </div>
-
-                                    <div className="flex flex-col items-center">
-                                        <div className="p-2 bg-yellow-50 rounded-lg mb-2">
-                                            <Icon icon="mingcute:ruler-line" className="w-5 h-5 text-yellow-600" />
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-500">{apartamento.area}m²</span>
-                                        <span className="text-xs text-gray-500">Área</span>
-                                    </div>
+                        {/* Paginação */}
+                        {totalPages > 1 && (
+                            <div className="flex justify-center items-center gap-4 mt-8">
+                                <button
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    <Icon icon="mingcute:arrow-left-line" className="w-4 h-4" />
+                                    Anterior
+                                </button>
+                                
+                                <div className="flex items-center gap-2">
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum;
+                                        if (totalPages <= 5) {
+                                            pageNum = i + 1;
+                                        } else if (currentPage <= 3) {
+                                            pageNum = i + 1;
+                                        } else if (currentPage >= totalPages - 2) {
+                                            pageNum = totalPages - 4 + i;
+                                        } else {
+                                            pageNum = currentPage - 2 + i;
+                                        }
+                                        
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => handlePageChange(pageNum)}
+                                                className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                    currentPage === pageNum
+                                                        ? 'bg-purple-900 text-white'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
-
-                                {/* Botão de Ação */}
-                                <div className="mt-auto">
-                                    <button className="w-full py-2.5 bg-purple-900 text-white rounded-lg font-medium hover:bg-purple-800 transition-colors">
-                                        Ver Detalhes
-                                    </button>
-                                </div>
+                                
+                                <button
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    Próxima
+                                    <Icon icon="mingcute:arrow-right-line" className="w-4 h-4" />
+                                </button>
                             </div>
+                        )}
+                    </>
+                ) : (
+                    /* Mensagem quando não há propriedades */
+                    !loading && (
+                        <div className="text-center py-12">
+                            <Icon icon="mingcute:building-2-line" className="w-20 h-20 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-xl font-medium text-gray-600 mb-2">Nenhum apartamento encontrado</h3>
+                            <p className="text-gray-500 mb-6">Não há apartamentos disponíveis para locação no momento.</p>
+                            <button
+                                onClick={() => fetchProperties(1)}
+                                className="px-6 py-3 bg-purple-900 text-white rounded-lg hover:bg-purple-800 transition-colors"
+                            >
+                                Tentar novamente
+                            </button>
                         </div>
-                    ))}
-                </div>
-
-                {/* Nenhum apartamento encontrado */}
-                {apartamentos.length === 0 && (
-                    <div className="text-center py-12">
-                        <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                            <Icon icon="mingcute:building-2-line" className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-gray-800 mb-2">Nenhum apartamento encontrado</h3>
-                        <p className="text-gray-600">Tente ajustar seus filtros para encontrar mais opções.</p>
-                    </div>
+                    )
                 )}
-
-                {/* Paginação */}
-                <div className="mt-8 flex justify-center">
-                    <div className="flex items-center gap-2">
-                        <button className="p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">
-                            <Icon icon="mingcute:left-line" className="w-4 h-4" />
-                        </button>
-                        <button className="w-10 h-10 rounded-lg bg-purple-900 text-white font-medium">1</button>
-                        <button className="w-10 h-10 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">2</button>
-                        <button className="w-10 h-10 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">3</button>
-                        <button className="w-10 h-10 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">4</button>
-                        <button className="p-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">
-                            <Icon icon="mingcute:right-line" className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
     );

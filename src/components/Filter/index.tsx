@@ -2,56 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
-
-type FilterType = {
-  transactionType: "comprar" | "alugar";
-  location: string;
-  dataInicio: string;
-  dataFim: string;
-  quartos: number | "";
-  andares: number | "";
-  vagas: number | "";
-  banheiros: number | "";
-  cep: string;
-  areaMin: string;
-  areaMax: string;
-  endereco: string;
-  bairro: string;
-  uf: string;
-  garagem: number | "";
-  lavabo: number | "";
-  fachada: string;
-  mobilia: number | "";
-  valorMin: string;
-  valorMax: string;
-};
+import { useFilters } from "@/app/context";
 
 export default function Filter() {
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const { 
+    filters, 
+    setFilters, 
+    activeFiltersCount, 
+    resetFilters: contextResetFilters,
+    isFilterOpen, 
+    setIsFilterOpen 
+  } = useFilters();
+  
   const [activeSection, setActiveSection] = useState<string>("valores");
   const [isMobile, setIsMobile] = useState(false);
-  const [filters, setFilters] = useState<FilterType>({
-    transactionType: "comprar",
-    location: "",
-    dataInicio: "",
-    dataFim: "",
-    quartos: "",
-    andares: "",
-    vagas: "",
-    banheiros: "",
-    cep: "",
-    areaMin: "",
-    areaMax: "",
-    endereco: "",
-    bairro: "",
-    uf: "",
-    garagem: "",
-    lavabo: "",
-    fachada: "",
-    mobilia: "",
-    valorMin: "",
-    valorMax: "",
-  });
 
   // Detectar tamanho da tela
   useEffect(() => {
@@ -75,38 +39,18 @@ export default function Filter() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [isFilterOpen]);
 
-  const handleFilterChange = (field: keyof FilterType, value: any) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
+  const handleFilterChange = (field: keyof typeof filters, value: any) => {
+    setFilters({ ...filters, [field]: value });
   };
 
   const handleSearch = () => {
     console.log("Realizando busca com filtros:", filters);
-    // Implementar lógica de busca
+    // Disparar evento de busca para os componentes ouvirem
+    window.dispatchEvent(new CustomEvent('filtersApplied', { detail: filters }));
   };
 
   const resetFilters = () => {
-    setFilters({
-      transactionType: "comprar",
-      location: "",
-      dataInicio: "",
-      dataFim: "",
-      quartos: "",
-      andares: "",
-      vagas: "",
-      banheiros: "",
-      cep: "",
-      areaMin: "",
-      areaMax: "",
-      endereco: "",
-      bairro: "",
-      uf: "",
-      garagem: "",
-      lavabo: "",
-      fachada: "",
-      mobilia: "",
-      valorMin: "",
-      valorMax: "",
-    });
+    contextResetFilters();
   };
 
   const aplicarFiltros = () => {
@@ -119,13 +63,6 @@ export default function Filter() {
     "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", 
     "RS", "RO", "RR", "SC", "SP", "SE", "TO"
   ];
-
-  const activeFiltersCount = Object.values(filters).filter(v => 
-    v !== "" && 
-    v !== "comprar" && 
-    v !== "alugar" && 
-    v !== filters.location
-  ).length;
 
   return (
     <div className="w-full max-w-4xl mx-auto my-10">
@@ -341,6 +278,23 @@ export default function Filter() {
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-gray-800 mb-2">Características</h3>
                   <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="property-type-mobile" className="block text-xs font-medium text-gray-700 mb-1">
+                        Tipo de Imóvel
+                      </label>
+                      <select
+                        id="property-type-mobile"
+                        name="propertyType"
+                        value={filters.propertyType || "all"}
+                        onChange={(e) => handleFilterChange("propertyType", e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 text-gray-400 focus:text-black rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                      >
+                        <option value="all">Todos</option>
+                        <option value="apartment">Apartamento</option>
+                        <option value="house">Casa</option>
+                      </select>
+                    </div>
+
                     <div>
                       <label htmlFor="quartos-mobile" className="block text-xs font-medium text-gray-700 mb-1">
                         Quartos
@@ -753,6 +707,23 @@ export default function Filter() {
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     <div>
+                      <label htmlFor="property-type-desktop" className="block text-sm font-medium text-gray-700 mb-2">
+                        Tipo de Imóvel
+                      </label>
+                      <select
+                        id="property-type-desktop"
+                        name="propertyType"
+                        value={filters.propertyType || "all"}
+                        onChange={(e) => handleFilterChange("propertyType", e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 text-gray-400 focus:text-black rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                      >
+                        <option value="all">Todos</option>
+                        <option value="apartment">Apartamento</option>
+                        <option value="house">Casa</option>
+                      </select>
+                    </div>
+
+                    <div>
                       <label htmlFor="quartos-desktop" className="block text-sm font-medium text-gray-700 mb-2">
                         Quartos
                       </label>
@@ -1056,7 +1027,7 @@ export default function Filter() {
                   <button
                     type="button"
                     onClick={() => setIsFilterOpen(false)}
-                    className="flex-1 px-6 py-3 border border-gray-300 text-gray-400 focus:text-black text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                    className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                   >
                     Cancelar
                   </button>

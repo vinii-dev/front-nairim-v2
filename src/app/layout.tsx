@@ -5,6 +5,7 @@ import { Poppins } from 'next/font/google';
 import { PopupProvider } from "@/contexts/PopupContext";
 import { MessageProvider } from "@/contexts/MessageContext";
 import GlobalNotifications from "@/components/GlobalNotifications";
+import { FilterProvider } from "./context";
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -33,7 +34,9 @@ export default function RootLayout({
         <AuthProvider>
           <PopupProvider>
             <MessageProvider>
+              <FilterProvider>
               {children}
+              </FilterProvider>
               <GlobalNotifications />
             </MessageProvider>
           </PopupProvider>

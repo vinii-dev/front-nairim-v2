@@ -1,15 +1,16 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-nairim-v2-production.up.railway.app';
 
 export interface ApiResponse<T> {
-  items: ApiResponse<Property>;
-  properties: ApiResponse<Property>;
-  count: number;
-  success: ApiResponse<Property>;
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+  items?: T[];
+  properties?: T[];
+  count?: number;
+  success?: boolean;
+  data?: T[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+  [key: string]: any; // Permite propriedades adicionais
 }
 
 export interface Property {
@@ -58,19 +59,59 @@ export interface Property {
     type: string;
     filename: string;
   }>;
+  // Campos adicionais para suportar a estrutura atual dos componentes
+  type?: {
+    id: string;
+    description: string;
+    name?: string;
+  };
+  property_type?: string;
+  images?: string[];
+  photos?: string[];
+  rental_value?: number;
+  sale_value?: number;
+  condo_fee?: number;
+  has_condominium?: boolean;
+  garage?: number;
+  parking_spaces?: number;
+  area?: number;
+  land_area?: number;
+  suites?: number;
+  year_built?: number;
+  construction_year?: number;
+  garden?: boolean;
+  has_garden?: boolean;
+  pool?: boolean;
+  has_pool?: boolean;
+  barbecue?: boolean;
+  has_barbecue?: boolean;
 }
 
 export interface PropertyFilters {
   page?: number;
   limit?: number;
   status?: string;
-  type_id?: string;
+  property_type?: string;
+  transaction_type?: string;
   min_price?: number;
   max_price?: number;
   city?: string;
+  state?: string;
+  district?: string;
+  zip_code?: string;
   bedrooms?: number;
+  bathrooms?: number;
+  garage_spaces?: number;
+  garage?: number;
+  min_area?: number;
+  max_area?: number;
   furnished?: boolean;
-  agency_id?: string;
+  search?: string;
+  // Novos campos para suportar filtros adicionais
+  floor?: number;
+  lavabo?: number;
+  facade_condition?: string;
+  available_from?: string;
 }
 
 export const propertyService = {
@@ -101,6 +142,7 @@ export const propertyService = {
       }
       
       const data = await response.json();
+      console.log('API Response:', data);
       return data;
     } catch (error) {
       console.error('Error in getAllProperties:', error);

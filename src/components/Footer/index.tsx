@@ -8,18 +8,25 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="relative bg-[#050505] border-t border-white/[0.02] overflow-hidden">
+    <footer className="relative bg-[#0A0A0A] border-t border-purple-900/20 overflow-hidden">
       
-      {/* Detalhe de Iluminação - Glow de Canto Cirúrgico */}
-      <div className="absolute bottom-0 right-0 w-[300px] md:w-[600px] h-[300px] md:h-[600px] bg-[#C9B37E]/[0.015] blur-[60px] md:blur-[120px] rounded-full pointer-events-none" />
+      {/* Glow roxo no canto */}
+      <div className="absolute bottom-0 right-0 w-[400px] md:w-[800px] h-[400px] md:h-[800px] bg-purple-900/[0.03] blur-[80px] md:blur-[150px] rounded-full pointer-events-none" />
+      
+      {/* Efeito de grid sutil */}
+      <div className="absolute inset-0 opacity-[0.02]" style={{
+        backgroundImage: `linear-gradient(to right, #8B5CF6 1px, transparent 1px),
+                          linear-gradient(to bottom, #8B5CF6 1px, transparent 1px)`,
+        backgroundSize: '80px 80px'
+      }} />
 
-      <div className="max-w-[1800px] mx-auto px-6 md:px-20 pt-20 md:pt-40 pb-12 md:pb-16">
+      <div className="relative max-w-[1800px] mx-auto px-6 md:px-20 pt-16 md:pt-32 pb-12 md:pb-16">
         
-        {/* Grid Principal - O "Dashboard" de Rodapé */}
-        <div className="grid gap-12 md:gap-20 md:grid-cols-4 xl:grid-cols-12 mb-20 md:mb-40 items-start">
+        {/* Grid Principal */}
+        <div className="grid gap-12 md:gap-16 md:grid-cols-4 xl:grid-cols-12 mb-16 md:mb-32 items-start">
 
-          {/* MARCA & IDENTIDADE INSTITUCIONAL */}
-          <div className="md:col-span-6 space-y-8 md:space-y-12">
+          {/* Logo e Descrição */}
+          <div className="md:col-span-6 space-y-6 flex flex-col justify-center items-center lg:justify-start lg:items-start md:space-y-10">
             <motion.div 
               initial={{ opacity: 0, x: -10 }}
               whileInView={{ opacity: 1, x: 0 }}
@@ -27,89 +34,154 @@ export default function Footer() {
               viewport={{ once: true }}
               className="flex justify-center md:justify-start"
             >
-              <Image
-                src="/logo.svg"
-                alt="Mavellium Protocol"
-                width={180}
-                height={52}
-                className="h-8 md:h-22 w-auto brightness-110"
-              />
+              <div className="relative">
+                <div className="text-3xl md:text-4xl font-bold tracking-tight">
+                  <Image 
+                    src="/logo.svg" 
+                    alt="Logo da Nairim Holding" 
+                    width={150} 
+                    height={50} 
+                    className="object-contain md:w-auto md:h-20"
+                  />
+                </div>
+                <div className="text-[10px] md:text-[15px] tracking-[0.4em] text-purple-700/45 mt-2 text-center md:text-left">
+                  HOLDING COMPANY
+                </div>
+              </div>
             </motion.div>
             
-            <div className="flex flex-col gap-4 md:gap-6 border-l border-purple-800/50 pl-6 md:pl-8 sm:items-center md:items-start">
-              <p className="text-[10px] md:text-[13px] text-[#666] font-light leading-[1.8] md:leading-[2.5] max-w-md text-center md:text-left">
-                A Mavellium Standard opera na intersecção entre engenharia de sistemas e medicina de elite, consolidando soberania digital para instituições que não admitem o comum.
+            <div className="flex flex-col gap-4 md:gap-6 border-l border-purple-800/30 pl-6 md:pl-8 sm:items-center md:items-start">
+              <p className="text-[12px] md:text-[14px] text-gray-400 font-light leading-relaxed max-w-md text-center md:text-left">
+                Grupo familiar com tradição em Garça/SP, investindo no futuro através de 
+                inovação, desenvolvimento regional e crescimento sustentável.
               </p>
             </div>
           </div>
 
-          {/* PROTOCOLO E ADMISSÃO */}
+          {/* Navegação */}
           <div className="md:col-span-3 space-y-6 md:space-y-10">
-            <h4 className="text-[8px] md:text-[15px] text-purple-800 tracking-[0.3em] opacity-60 text-center md:text-left">
-              Protocol Access
+            <h4 className="text-[12px] md:text-[15px] text-purple-400 tracking-[0.3em] opacity-80 text-center md:text-left">
+              NAVEGAÇÃO
             </h4>
             <nav className="flex flex-col gap-4 md:gap-6">
               {[
-                { name: 'The Method', href: '#metodo' },
-                { name: 'Architecture', href: '#engenharia' },
-                { name: 'Admissions Inquiry', href: '/inquiry' }
+                { name: 'Ínicio', href: '/' },
+                { name: 'Imóveis', href: '/imoveis' },
+                { name: 'Sobre', href: '/sobre' },
+                { name: 'Contato', href: '/contato' }
               ].map((item) => (
                 <Link 
                   key={item.name}
                   href={item.href} 
-                  className="group flex items-center gap-4 text-[9px] md:text-[10px] tracking-[0.3em] text-[#888] hover:text-white transition-all duration-500 font-bold justify-center md:justify-start"
+                  className="group flex items-center gap-4 text-[13px] md:text-[14px] tracking-[0.1em] text-gray-400 hover:text-white transition-all duration-500 font-medium justify-center md:justify-start"
                 >
-                  <span className="w-0 group-hover:w-4 md:group-hover:w-6 h-[1px] bg-purple-800 transition-all duration-500" />
+                  <span className="w-0 group-hover:w-6 md:group-hover:w-8 h-[1px] bg-purple-500 transition-all duration-500" />
                   {item.name}
                 </Link>
               ))}
             </nav>
           </div>
 
-          {/* CONCIERGE & LOCALIZAÇÃO TÉCNICA */}
+          {/* Localização e Contato */}
           <div className="md:col-span-3 space-y-6 md:space-y-10">
-            <h4 className="text-[8px] md:text-[15px] tracking-[0.3em] text-purple-800 opacity-60 text-center md:text-left">
-              Direct Contact
+            <h4 className="text-[12px] md:text-[15px] tracking-[0.3em] text-purple-400 opacity-80 text-center md:text-left">
+              CONTATO
             </h4>
             <div className="space-y-6 md:space-y-8 text-center md:text-left">
               <div className="flex flex-col gap-2">
-                <span className="text-[7px] md:text-[8px] tracking-[0.3em] md:tracking-[0.4em] text-white/20 uppercase font-bold">Secure Line</span>
-                <a href="mailto:contato@mavellium.com.br" className="text-[9px] md:text-[11px] tracking-[0.1em] md:tracking-[0.2em] text-white font-medium hover:text-[#C9B37E] transition-colors break-all">
-                  contato@mavellium.com.br
+                <span className="text-[10px] md:text-[11px] tracking-[0.2em] text-white/40 uppercase font-semibold">E-mail</span>
+                <a href="mailto:contato@nairimholding.com.br" className="text-[13px] md:text-[15px] tracking-[0.05em] text-white font-medium hover:text-purple-300 transition-colors break-all">
+                  contato@nairimholding.com.br
                 </a>
               </div>
               <div className="flex flex-col gap-2">
-                <span className="text-[7px] md:text-[8px] tracking-[0.3em] md:tracking-[0.4em] text-white/20 uppercase font-bold">HQ Coordinates</span>
-                <span className="text-[9px] md:text-[10px] tracking-[0.1em] md:tracking-[0.2em] text-white/40 uppercase leading-relaxed font-light">
-                  Geneva • São Paulo
+                <span className="text-[10px] md:text-[11px] tracking-[0.2em] text-white/40 uppercase font-semibold">Localização</span>
+                <span className="text-[13px] md:text-[14px] tracking-[0.05em] text-gray-300 leading-relaxed font-light">
+                  Garça • São Paulo • Brasil
+                </span>
+                <span className="text-[11px] md:text-[12px] tracking-[0.05em] text-purple-400/60 leading-relaxed font-light mt-2">
+                  Atuamos há mais de 20 anos na região
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* BASE LEGAL - A SENTENÇA FINAL */}
-        <div className="pt-12 md:pt-20 border-t border-white/[0.04] flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 relative">
+        {/* Linha divisória decorativa */}
+        <div className="relative py-8 md:py-12">
+          <div className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-900/50 to-transparent" />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="w-8 h-8 border border-purple-800/30 rotate-45" />
+          </div>
+        </div>
+
+        {/* Redes Sociais */}
+        <div className="flex flex-col items-center gap-8 md:gap-12 mb-12 md:mb-16">
+          <div className="text-center space-y-2">
+            <h5 className="text-[11px] md:text-[13px] tracking-[0.3em] text-gray-500 uppercase">
+              Conecte-se Conosco
+            </h5>
+            <p className="text-[12px] md:text-[14px] text-gray-400 max-w-lg">
+              Siga nossos projetos e iniciativas de desenvolvimento regional
+            </p>
+          </div>
           
-          {/* Marcador Central de Fluxo - Apenas no desktop */}
-          <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 w-20 h-px bg-purple-800/40" />
+          <div className="flex gap-6 md:gap-8">
+            {[
+              { name: 'LinkedIn', bg: 'bg-[#0077B5]', hover: 'hover:bg-[#006699]' },
+              { name: 'Instagram', bg: 'bg-gradient-to-r from-purple-600 to-pink-600', hover: 'hover:opacity-90' },
+              { name: 'YouTube', bg: 'bg-[#FF0000]', hover: 'hover:bg-[#CC0000]' },
+              { name: 'Facebook', bg: 'bg-[#1877F2]', hover: 'hover:bg-[#166FE5]' }
+            ].map((social) => (
+              <button
+                key={social.name}
+                className={`w-10 h-10 md:w-12 md:h-12 rounded-full ${social.bg} ${social.hover} transition-all duration-300 flex items-center justify-center text-white text-sm font-medium transform hover:scale-110`}
+                aria-label={`${social.name} da Nairim Holding`}
+              >
+                {social.name.charAt(0)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Base Legal */}
+        <div className="pt-8 md:pt-12 border-t border-white/[0.03] flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 relative">
+          
+          {/* Linha vertical decorativa no desktop */}
+          <div className="hidden md:block absolute top-0 left-1/2 -translate-x-1/2 w-px h-8 bg-gradient-to-b from-purple-800/40 to-transparent" />
 
           {/* Copyright */}
-          <div className="order-2 md:order-1 flex items-center justify-center md:justify-start">
-            <p className="text-[8px] md:text-[9px] uppercase tracking-[0.3em] md:tracking-[0.5em] text-[#888] font-black text-center">
-              © {currentYear} Nairim Holding
+          <div className="order-2 md:order-1">
+            <p className="text-[11px] md:text-[12px] uppercase tracking-[0.2em] text-gray-500 font-medium text-center md:text-left">
+              © {currentYear} Nairim Holding • Garça/SP
             </p>
           </div>
 
           {/* Links de termos */}
-          <div className="order-1 md:order-2 flex gap-8 md:gap-16 justify-center">
-            {['Privacidade', 'Termos'].map(link => (
-              <Link key={link} href={`/${link.toLowerCase()}`} className="text-[8px] md:text-[9px] uppercase tracking-[0.3em] md:tracking-[0.5em] text-[#888] hover:text-white transition-all duration-500">
-                {link}
+          <div className="order-1 md:order-2 flex gap-6 md:gap-12 justify-center">
+            {[
+              { name: 'Privacidade', href: '/privacidade' },
+              { name: 'Termos de Uso', href: '/termos' },
+            ].map(link => (
+              <Link 
+                key={link.name} 
+                href={link.href} 
+                className="text-[11px] md:text-[12px] uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-all duration-300"
+              >
+                {link.name}
               </Link>
             ))}
           </div>
 
+        </div>
+
+        {/* Selo de qualidade */}
+        <div className="mt-10 pt-6 border-t border-white/[0.02] flex justify-center">
+          <div className="flex items-center gap-3 text-[10px] md:text-[11px] tracking-[0.1em] text-gray-600">
+            <div className="w-2 h-2 rounded-full bg-green-500/60 animate-pulse" />
+            <span>EMPRESA FAMILIAR COM TRADIÇÃO E INOVAÇÃO</span>
+            <div className="w-2 h-2 rounded-full bg-green-500/60 animate-pulse" />
+          </div>
         </div>
       </div>
     </footer>

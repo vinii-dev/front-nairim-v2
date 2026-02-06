@@ -65,98 +65,101 @@ export default function Filter() {
   ];
 
   return (
-    <div className="w-full max-w-4xl mx-auto my-10">
-      {/* Barra de Pesquisa Principal */}
-      <div className="bg-white rounded-xl shadow-lg p-4">
-        <div className="flex flex-col md:flex-row items-center gap-3">
-          {/* Toggle Compra/Aluguel */}
-          <div className="flex w-full md:w-auto border rounded-lg overflow-hidden shrink-0">
-            <button
-              type="button"
-              onClick={() => handleFilterChange("transactionType", "comprar")}
-              className={`flex-1 md:flex-none px-4 py-3 font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
-                filters.transactionType === "comprar"
-                  ? "bg-purple-900 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-              aria-pressed={filters.transactionType === "comprar"}
-            >
-              <Icon 
-                icon="mingcute:shopping-cart-2-line" 
-                className="w-4 h-4" 
-              />
-              <span className="text-sm md:text-base">Comprar</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleFilterChange("transactionType", "alugar")}
-              className={`flex-1 md:flex-none px-4 py-3 font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
-                filters.transactionType === "alugar"
-                  ? "bg-purple-900 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-              aria-pressed={filters.transactionType === "alugar"}
-            >
-              <Icon 
-                icon="mingcute:key-line" 
-                className="w-4 h-4" 
-              />
-              <span className="text-sm md:text-base">Alugar</span>
-            </button>
-          </div>
-
-          {/* Campo de Busca */}
-          <div className="w-full md:flex-1">
-            <div className="relative">
-              <Icon
-                icon="mingcute:search-line"
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5"
-              />
-              <input
-                id="search-input"
-                name="search"
-                type="text"
-                placeholder={`Buscar imóveis para ${filters.transactionType === "comprar" ? "comprar" : "alugar"}...`}
-                value={filters.location}
-                onChange={(e) => handleFilterChange("location", e.target.value)}
-                className="w-full pl-10 md:pl-12 pr-4 py-2 md:py-3 text-sm text-gray-400 focus:text-black md:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                aria-label="Buscar imóveis por localização"
-              />
+    <>
+      {/* Container Principal com position absolute apenas no desktop */}
+      <div className="w-full max-w-4xl mx-auto my-10 md:absolute md:top-500px md:left-1/2 md:-translate-y-1/2 md:-translate-x-1/2 md:z-10 md:my-0 md:w-[95%] md:max-w-6xl">
+        {/* Barra de Pesquisa Principal */}
+        <div className="bg-white rounded-xl shadow-lg p-4 md:shadow-2xl md:border md:border-gray-200">
+          <div className="flex flex-col md:flex-row items-center gap-3">
+            {/* Toggle Compra/Aluguel */}
+            <div className="flex w-full md:w-auto border rounded-lg overflow-hidden shrink-0">
+              <button
+                type="button"
+                onClick={() => handleFilterChange("transactionType", "comprar")}
+                className={`flex-1 md:flex-none px-4 py-3 font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
+                  filters.transactionType === "comprar"
+                    ? "bg-purple-900 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+                aria-pressed={filters.transactionType === "comprar"}
+              >
+                <Icon 
+                  icon="mingcute:shopping-cart-2-line" 
+                  className="w-4 h-4" 
+                />
+                <span className="text-sm md:text-base">Comprar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFilterChange("transactionType", "alugar")}
+                className={`flex-1 md:flex-none px-4 py-3 font-medium transition-all duration-300 flex items-center justify-center gap-2 ${
+                  filters.transactionType === "alugar"
+                    ? "bg-purple-900 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+                aria-pressed={filters.transactionType === "alugar"}
+              >
+                <Icon 
+                  icon="mingcute:key-line" 
+                  className="w-4 h-4" 
+                />
+                <span className="text-sm md:text-base">Alugar</span>
+              </button>
             </div>
+
+            {/* Campo de Busca */}
+            <div className="w-full md:flex-1">
+              <div className="relative">
+                <Icon
+                  icon="mingcute:search-line"
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5"
+                />
+                <input
+                  id="search-input"
+                  name="search"
+                  type="text"
+                  placeholder={`Buscar imóveis para ${filters.transactionType === "comprar" ? "comprar" : "alugar"}...`}
+                  value={filters.location}
+                  onChange={(e) => handleFilterChange("location", e.target.value)}
+                  className="w-full pl-10 md:pl-12 pr-4 py-2 md:py-3 text-sm text-gray-400 focus:text-black md:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  aria-label="Buscar imóveis por localização"
+                />
+              </div>
+            </div>
+
+            {/* Botão de Filtro */}
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen(true)}
+              className="w-full md:w-auto px-4 py-2.5 md:px-6 md:py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 shrink-0"
+              aria-label={`Abrir filtros avançados (${activeFiltersCount} filtros ativos)`}
+              aria-expanded={isFilterOpen}
+            >
+              <Icon icon="mingcute:filter-line" className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="text-sm md:text-base">Filtros</span>
+              {activeFiltersCount > 0 && (
+                <span className="bg-purple-900 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {/* Botão de Buscar */}
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="w-full md:w-auto px-4 py-2.5 md:px-6 md:py-3 bg-purple-900 text-white rounded-lg font-medium hover:bg-purple-800 transition-colors flex items-center justify-center gap-2 shrink-0"
+              aria-label="Buscar imóveis"
+            >
+              <Icon icon="mingcute:search-line" className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="text-sm md:text-base">Buscar</span>
+            </button>
           </div>
-
-          {/* Botão de Filtro */}
-          <button
-            type="button"
-            onClick={() => setIsFilterOpen(true)}
-            className="w-full md:w-auto px-4 py-2.5 md:px-6 md:py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 shrink-0"
-            aria-label={`Abrir filtros avançados (${activeFiltersCount} filtros ativos)`}
-            aria-expanded={isFilterOpen}
-          >
-            <Icon icon="mingcute:filter-line" className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="text-sm md:text-base">Filtros</span>
-            {activeFiltersCount > 0 && (
-              <span className="bg-purple-900 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {activeFiltersCount}
-              </span>
-            )}
-          </button>
-
-          {/* Botão de Buscar */}
-          <button
-            type="button"
-            onClick={handleSearch}
-            className="w-full md:w-auto px-4 py-2.5 md:px-6 md:py-3 bg-purple-900 text-white rounded-lg font-medium hover:bg-purple-800 transition-colors flex items-center justify-center gap-2 shrink-0"
-            aria-label="Buscar imóveis"
-          >
-            <Icon icon="mingcute:search-line" className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="text-sm md:text-base">Buscar</span>
-          </button>
         </div>
       </div>
 
-      {/* Modal de Filtros - Mobile */}
+      {/* Modal de Filtros - Mobile (Renderizado fora do container principal) */}
       {isFilterOpen && isMobile && (
         <div className="fixed inset-0 z-50">
           {/* Overlay */}
@@ -612,7 +615,7 @@ export default function Filter() {
         </div>
       )}
 
-      {/* Modal de Filtros - Desktop */}
+      {/* Modal de Filtros - Desktop (Renderizado fora do container principal) */}
       {isFilterOpen && !isMobile && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Overlay */}
@@ -1045,6 +1048,6 @@ export default function Filter() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -366,7 +366,7 @@ export default function CasasLocacao() {
   // Loading skeleton
   if (loading && casas.length === 0) {
     return (
-      <div className="w-full py-8">
+      <div className="w-full py-8 mt-20">
         <div className="container mx-auto px-4">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-800 mb-2">
@@ -400,7 +400,7 @@ export default function CasasLocacao() {
   }
 
   return (
-    <div className="w-full py-8">
+    <div className="w-full py-8 mt-20">
       <div className="container mx-auto px-4">
         {/* Cabeçalho */}
         <div className="mb-8">

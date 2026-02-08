@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import React from 'react';
+
 export interface ApiResponse {
   success: boolean;
   data: {
@@ -33,7 +35,6 @@ export interface Option {
   value: string | number;
 }
 
-// Atualizar a interface FormFieldDef para aceitar função no hidden
 export interface FormFieldDef {
   field: string;
   label: string;
@@ -54,28 +55,20 @@ export interface FormFieldDef {
   icon?: React.ReactNode;
   disabled?: boolean;
   readOnly?: boolean;
-  hidden?: boolean | ((formValues: any) => boolean); // Permitir função ou boolean
+  hidden?: boolean | ((formValues: any) => boolean);
   mask?: 'cpf' | 'cnpj' | 'cep' | 'telefone' | 'money' | 'metros2' | 'metros';
   maxLength?: number;
   showIncrementButtons?: boolean;
   tabIndex?: number;
   autoFocus?: boolean;
-  
-  // Para tipo 'file'
   multiple?: boolean;
   accept?: string;
   buttonText?: string;
   textButton?: string;
   maxFiles?: number;
-  
-  // Para tipo 'number'
   min?: number;
   max?: number;
-  
-  // Para tipo 'textarea'
   rows?: number;
-
-  // Para tipo 'custom'
   render?: (value: any, formValues?: any) => React.ReactNode;
 }
 
@@ -97,4 +90,54 @@ export interface DynamicFormConfig {
   onCancel?: () => void;
   transformData?: (data: any) => any;
   transformResponse?: (data: any) => any;
+}
+
+export interface MetricDataItem {
+  id: string | number;
+  title?: string;
+  [key: string]: any;
+}
+
+export interface MetricWithData {
+  result: number;
+  variation: number;
+  isPositive: boolean;
+  data?: MetricDataItem[];
+}
+
+export interface MetricResponse {
+  averageRentalTicket: MetricWithData;
+  totalRentalActive: MetricWithData;
+  totalAcquisitionValue: MetricWithData;
+  financialVacancyRate: MetricWithData;
+  totalPropertyTaxAndCondoFee: MetricWithData;
+  vacancyInMonths: MetricWithData;
+  totalPropertys: MetricWithData;
+  countPropertiesWithLessThan3Docs: MetricWithData;
+  totalPropertiesWithSaleValue: MetricWithData;
+  ownersTotal: MetricWithData;
+  tenantsTotal: MetricWithData;
+  propertiesPerOwner: MetricWithData;
+  agenciesTotal: MetricWithData;
+  
+  // ADICIONADOS PARA CORRIGIR ERROS DE TIPAGEM
+  vacancyRate: MetricWithData;
+  occupationRate: MetricWithData;
+
+  availablePropertiesByType: Array<{
+    name: string;
+    value: number;
+    data?: MetricDataItem[];
+  }>;
+  propertiesByAgency: Array<{
+    name: string;
+    value: number;
+    data?: MetricDataItem[];
+  }>;
+  
+  geolocationData: Array<{
+    lat: number;
+    lng: number;
+    info: string;
+  }>;
 }

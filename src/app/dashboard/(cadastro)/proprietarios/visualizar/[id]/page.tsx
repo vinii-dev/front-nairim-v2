@@ -19,14 +19,12 @@ export default function VisualizarProprietarioPage() {
 
   // Transformar dados da API para o formulário
   const transformData = (apiData: any) => {
-    console.log('🔄 Transformando dados da API (visualização):', apiData);
-    
     if (!apiData) return {};
     
     const address = apiData.addresses?.[0]?.address || {};
     const contact = apiData.contacts?.[0]?.contact || {};
     
-    const transformed = {
+    return {
       name: apiData.name || '',
       internal_code: apiData.internal_code || '',
       occupation: apiData.occupation || '',
@@ -47,9 +45,6 @@ export default function VisualizarProprietarioPage() {
       cellphone: contact.cellphone || '',
       email: contact.email || '',
     };
-
-    console.log('📋 Dados transformados:', transformed);
-    return transformed;
   };
 
   const steps: FormStep[] = useMemo(() => [
@@ -65,10 +60,7 @@ export default function VisualizarProprietarioPage() {
           placeholder: 'Nome ou razão social',
           autoFocus: false,
           icon: <UserIcon size={20} />,
-          validation: {
-            minLength: 3,
-            maxLength: 200,
-          },
+          validation: { minLength: 3, maxLength: 200 },
           className: 'col-span-full',
           readOnly: true,
         },
@@ -81,6 +73,7 @@ export default function VisualizarProprietarioPage() {
           readOnly: true,
           hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
         },
+        // CAMPOS PF
         {
           field: 'occupation',
           label: 'Profissão',
@@ -110,6 +103,7 @@ export default function VisualizarProprietarioPage() {
           readOnly: true,
           hidden: (formValues: any) => !formValues.cpf || formValues.cpf.trim() === '',
         },
+        // CAMPOS PJ
         {
           field: 'cnpj',
           label: 'CNPJ',
@@ -217,6 +211,7 @@ export default function VisualizarProprietarioPage() {
       title: 'Contato',
       icon: <Phone size={20} />,
       fields: [
+        // CORREÇÃO: Removido o hidden daqui também
         {
           field: 'contact_name',
           label: 'Nome do Contato',
@@ -225,7 +220,6 @@ export default function VisualizarProprietarioPage() {
           icon: <UserIcon size={20} />,
           className: 'col-span-full',
           readOnly: true,
-          hidden: (formValues: any) => !formValues.contact_name || formValues.contact_name.trim() === '',
         },
         {
           field: 'phone',

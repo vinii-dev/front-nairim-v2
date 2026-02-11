@@ -29,6 +29,9 @@ interface DynamicFormManagerProps {
   onSubmit?: (data: any) => Promise<any>;
   onFieldChange?: (fieldName: string, value: any) => Promise<any>;
   onFormValuesChange?: (values: any) => void;
+  completedSteps?: number[];
+  onStepComplete?: (stepIndex: number) => void;
+  canNavigateToStep?: (targetStep: number, currentStep: number, data: any) => boolean;
 }
 
 export default function DynamicFormManager({
@@ -46,6 +49,9 @@ export default function DynamicFormManager({
   onSubmit,
   onFieldChange,
   onFormValuesChange,
+  completedSteps: externalCompletedSteps,
+  onStepComplete,
+  canNavigateToStep: externalCanNavigateToStep,
 }: DynamicFormManagerProps) {
   const router = useRouter();
   const { showMessage } = useMessageContext();
@@ -55,12 +61,12 @@ export default function DynamicFormManager({
   const [currentStep, setCurrentStep] = useState(0);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [internalCompletedSteps, setInternalCompletedSteps] = useState<number[]>([]);
   
-  // CORREÇÃO: Variável derivada direta, removido useState não utilizado
   const isViewMode = mode === 'view';
+  
+  const completedSteps = externalCompletedSteps || internalCompletedSteps;
 
-  // Função para obter campos atuais com segurança
   const getCurrentFields = (): FormFieldDef[] => {
     if (steps && steps.length > 0) {
       const currentStepData = steps[currentStep];
@@ -73,7 +79,6 @@ export default function DynamicFormManager({
   const hasSteps = !!steps && steps.length > 1;
   const isLastStep = hasSteps ? currentStep === steps.length - 1 : true;
 
-  // Validação de campos obrigatórios para cada passo
   const validateStep = useCallback((stepIndex: number, data: any): boolean => {
     if (!steps) return true;
     
@@ -101,8 +106,11 @@ export default function DynamicFormManager({
     return true;
   }, [steps, isViewMode]);
 
-  // Verifica se pode navegar para um passo
   const canNavigateToStep = (targetStep: number): boolean => {
+    if (externalCanNavigateToStep) {
+      return externalCanNavigateToStep(targetStep, currentStep, formValues);
+    }
+
     if (targetStep < currentStep) return true;
     
     if (targetStep > currentStep) {
@@ -112,8 +120,8 @@ export default function DynamicFormManager({
         return false;
       }
       
-      if (!completedSteps.includes(currentStep)) {
-        setCompletedSteps(prev => [...prev, currentStep]);
+      if (!externalCompletedSteps && !internalCompletedSteps.includes(currentStep)) {
+        setInternalCompletedSteps(prev => [...prev, currentStep]);
       }
     }
     
@@ -129,16 +137,15 @@ export default function DynamicFormManager({
   };
 
   useEffect(() => {
-    if (!hasSteps || isViewMode) return;
+    if (!hasSteps || isViewMode || externalCompletedSteps) return;
 
     const isCurrentStepComplete = validateStep(currentStep, formValues);
     
-    if (isCurrentStepComplete && !completedSteps.includes(currentStep)) {
-      setCompletedSteps(prev => [...prev, currentStep]);
+    if (isCurrentStepComplete && !internalCompletedSteps.includes(currentStep)) {
+      setInternalCompletedSteps(prev => [...prev, currentStep]);
     }
-  }, [formValues, currentStep, completedSteps, hasSteps, validateStep, isViewMode]);
+  }, [formValues, currentStep, internalCompletedSteps, hasSteps, validateStep, isViewMode, externalCompletedSteps]);
 
-  // Inicializar valores
   useEffect(() => {
     const initialValues: Record<string, any> = {};
     const allFields = steps ? steps.flatMap(step => step.fields || []) : fields || [];
@@ -156,7 +163,7 @@ export default function DynamicFormManager({
             initialValues[field.field] = 0;
             break;
           case 'file':
-          case 'custom': // Inicializa custom como array vazio se não houver default
+          case 'custom':
             initialValues[field.field] = [];
             break;
           default:
@@ -168,7 +175,6 @@ export default function DynamicFormManager({
     setFormValues(initialValues);
   }, [steps, fields]);
 
-  // Buscar dados para edição/visualização
   useEffect(() => {
     if (mode !== 'create' && id) {
       const fetchData = async () => {
@@ -196,9 +202,9 @@ export default function DynamicFormManager({
           
           setFormValues((prev: Record<string, any>) => ({ ...prev, ...updatedValues }));
 
-          if (steps) {
+          if (steps && !externalCompletedSteps) {
             const allStepsCompleted = steps.map((_, index) => index);
-            setCompletedSteps(allStepsCompleted);
+            setInternalCompletedSteps(allStepsCompleted);
           }
 
         } catch (error) {
@@ -212,7 +218,7 @@ export default function DynamicFormManager({
 
       fetchData();
     }
-  }, [mode, id, resource, router, showMessage, title, basePath, transformData, steps, fields]);
+  }, [mode, id, resource, router, showMessage, title, basePath, transformData, steps, fields, externalCompletedSteps]);
 
   const validateField = (field: FormFieldDef, value: any): string | null => {
     if (isViewMode) return null;
@@ -366,10 +372,10 @@ export default function DynamicFormManager({
       }
     }
 
-    if (hasSteps) {
+    if (hasSteps && !externalCompletedSteps) {
       const isCurrentStepComplete = validateStep(currentStep, updatedValues);
-      if (isCurrentStepComplete && !completedSteps.includes(currentStep)) {
-        setCompletedSteps(prev => [...prev, currentStep]);
+      if (isCurrentStepComplete && !internalCompletedSteps.includes(currentStep)) {
+        setInternalCompletedSteps(prev => [...prev, currentStep]);
       }
     }
   };
@@ -378,8 +384,12 @@ export default function DynamicFormManager({
     if (!hasSteps) return true;
     
     if (validateCurrentStep()) {
-      if (!completedSteps.includes(currentStep)) {
-        setCompletedSteps(prev => [...prev, currentStep]);
+      if (onStepComplete) {
+        onStepComplete(currentStep);
+      }
+      
+      if (!externalCompletedSteps && !internalCompletedSteps.includes(currentStep)) {
+        setInternalCompletedSteps(prev => [...prev, currentStep]);
       }
       
       if (currentStep < steps!.length - 1) {
@@ -513,7 +523,7 @@ export default function DynamicFormManager({
 
     let shouldDisable = isDisabled;
     
-    if (hasSteps && currentStep === 1 && !completedSteps.includes(0) && !isViewMode) {
+    if (hasSteps && currentStep === 1 && !completedSteps.includes(0) && !isViewMode && !externalCompletedSteps) {
       shouldDisable = true;
     }
 
@@ -728,7 +738,6 @@ export default function DynamicFormManager({
               {field.label}
             </label>
             <div className="mt-1">
-              {/* CORREÇÃO: Passando o terceiro argumento onChange */}
               {field.render ? field.render(value, formValues, (newValue: any) => handleChange(field.field, newValue)) : null}
             </div>
           </div>

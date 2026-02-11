@@ -6,12 +6,13 @@ import { useMemo } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   User, MapPin, Phone, FileText, Hash,
   Briefcase, Heart, User as UserIcon,
-  MapPin as MapPinIcon, Phone as PhoneIcon, Mail as MailIcon,
-  Building as BuildingIcon, Globe, Smartphone
+  MapPin as MapPinIcon,
+  Building as BuildingIcon, Globe
 } from 'lucide-react';
 
 export default function EditarInquilinoPage() {
@@ -32,7 +33,7 @@ export default function EditarInquilinoPage() {
           const data = await response.json();
           if (data.error) {
             showMessage(data.error, 'error');
-            return { street: '', district: '', city: '', state: '', country: 'Brasil' };
+            return null;
           } else {
             showMessage('Endereço atualizado!', 'success');
             return {
@@ -54,8 +55,6 @@ export default function EditarInquilinoPage() {
 
   const handleSubmit = async (data: any) => {
     try {
-      console.log('✏️ Atualizando inquilino...', data);
-      
       const tipo = data.cpf ? 'fisica' : 'juridica';
       
       const formattedData: any = {
@@ -73,14 +72,12 @@ export default function EditarInquilinoPage() {
             complement: data.complement || null,
           }
         ],
-        contacts: [
-          {
-            contact: data.contact_name || null,
-            phone: data.phone?.replace(/\D/g, ''),
-            email: data.email,
-            cellphone: data.cellphone?.replace(/\D/g, '') || null,
-          }
-        ]
+        contacts: data.contacts?.map((c: any) => ({
+            contact: c.contact || null,
+            phone: c.phone?.replace(/\D/g, '') || null,
+            email: c.email || null,
+            cellphone: c.cellphone?.replace(/\D/g, '') || null,
+        })) || []
       };
 
       if (tipo === 'fisica') {
@@ -106,9 +103,7 @@ export default function EditarInquilinoPage() {
         body: JSON.stringify(formattedData),
       });
 
-      const responseText = await response.text();
-      let result;
-      try { result = JSON.parse(responseText); } catch (e) { throw new Error('Resposta inválida'); }
+      const result = await response.json();
 
       if (!response.ok) {
         if (response.status === 409) {
@@ -121,7 +116,6 @@ export default function EditarInquilinoPage() {
       return result;
 
     } catch (error: any) {
-      console.error('❌ Erro na edição:', error);
       throw new Error(`Erro ao atualizar: ${error.message}`);
     }
   };
@@ -129,7 +123,6 @@ export default function EditarInquilinoPage() {
   const transformData = (apiData: any) => {
     if (!apiData) return {};
     const address = apiData.addresses?.[0]?.address || {};
-    const contact = apiData.contacts?.[0]?.contact || {};
     
     return {
       name: apiData.name || '',
@@ -148,10 +141,12 @@ export default function EditarInquilinoPage() {
       state: address.state || '',
       country: address.country || 'Brasil',
       complement: address.complement || '',
-      contact_name: contact.contact || '',
-      phone: contact.phone || '',
-      cellphone: contact.cellphone || '',
-      email: contact.email || '',
+      contacts: apiData.contacts?.map((c: any) => ({
+        contact: c.contact?.contact || c.contact || '', 
+        phone: c.contact?.phone || c.phone || '',
+        cellphone: c.contact?.cellphone || c.cellphone || '',
+        email: c.contact?.email || c.email || '',
+      })) || []
     };
   };
 
@@ -166,9 +161,7 @@ export default function EditarInquilinoPage() {
           type: 'text',
           required: true,
           placeholder: 'Nome',
-          autoFocus: true,
           icon: <UserIcon size={20} />,
-          validation: { minLength: 3, maxLength: 200 },
           className: 'col-span-full',
         },
         {
@@ -178,7 +171,6 @@ export default function EditarInquilinoPage() {
           icon: <Hash size={20} />,
           hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
         },
-        // CAMPOS PF
         {
           field: 'occupation',
           label: 'Profissão',
@@ -202,7 +194,6 @@ export default function EditarInquilinoPage() {
           icon: <FileText size={20} />,
           hidden: (formValues: any) => !formValues.cpf,
         },
-        // CAMPOS PJ
         {
           field: 'cnpj',
           label: 'CNPJ',
@@ -231,112 +222,33 @@ export default function EditarInquilinoPage() {
       title: 'Endereço',
       icon: <MapPin size={20} />,
       fields: [
-        {
-          field: 'zip_code',
-          label: 'CEP',
-          type: 'text',
-          required: true,
-          mask: 'cep',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'street',
-          label: 'Rua',
-          type: 'text',
-          required: true,
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-          className: 'col-span-full',
-        },
-        {
-          field: 'number',
-          label: 'Número',
-          type: 'text',
-          required: true,
-          icon: <Hash size={20} />,
-        },
-        {
-          field: 'complement',
-          label: 'Complemento',
-          type: 'text',
-          icon: <Hash size={20} />,
-        },
-        {
-          field: 'district',
-          label: 'Bairro',
-          type: 'text',
-          required: true,
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'city',
-          label: 'Cidade',
-          type: 'text',
-          required: true,
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'state',
-          label: 'Estado',
-          type: 'text',
-          required: true,
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'country',
-          label: 'País',
-          type: 'text',
-          required: true,
-          defaultValue: 'Brasil',
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        }
+        { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
+        { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+        { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
+        { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} /> },
+        { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+        { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+        { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },
+        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
       ],
     },
     {
-      title: 'Contato',
+      title: 'Contatos',
       icon: <Phone size={20} />,
       fields: [
-        // CORREÇÃO: "hidden" removido completamente
         {
-          field: 'contact_name',
-          label: 'Nome do Contato',
-          type: 'text',
-          icon: <UserIcon size={20} />,
+          field: 'contacts',
+          label: 'Lista de Contatos',
+          type: 'custom',
           className: 'col-span-full',
-        },
-        {
-          field: 'phone',
-          label: 'Telefone',
-          type: 'tel',
-          mask: 'telefone',
-          icon: <PhoneIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'cellphone',
-          label: 'Celular',
-          type: 'tel',
-          mask: 'telefone',
-          icon: <Smartphone size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'email',
-          label: 'E-mail',
-          type: 'email',
-          icon: <MailIcon size={20} />,
-          className: 'col-span-full',
-        },
+          render: (value: any, formValues: any, onChange: any) => (
+            <ContactManager 
+              value={value} 
+              onChange={onChange} 
+              resourceType="tenants"
+            />
+          )
+        }
       ],
     },
   ], []);

@@ -5,13 +5,12 @@ import { useMemo } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   Building2, MapPin, Phone, FileText,
-  User, Hash, Globe, Mail,
-  Building, MapPin as MapPinIcon,
-  Phone as PhoneIcon, Mail as MailIcon, CheckCircle,
-  Smartphone
+  Hash, Globe, Building, 
+  MapPin as MapPinIcon, CheckCircle
 } from 'lucide-react';
 
 export default function CadastrarImobiliariaPage() {
@@ -19,8 +18,6 @@ export default function CadastrarImobiliariaPage() {
   const router = useRouter();
 
   const handleFieldChange = async (fieldName: string, value: any) => {
-    console.log('handleFieldChange:', fieldName, value);
-    
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
       
@@ -31,21 +28,14 @@ export default function CadastrarImobiliariaPage() {
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
           
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
+            throw new Error(`Erro ${response.status}`);
           }
 
           const data = await response.json();
           
           if (data.error) {
             showMessage(data.error, 'error');
-            return {
-              street: '',
-              district: '',
-              city: '',
-              state: '',
-              country: 'Brasil',
-            };
+            return null;
           } else {
             showMessage('Endereço preenchido automaticamente!', 'success');
             
@@ -58,18 +48,9 @@ export default function CadastrarImobiliariaPage() {
             };
           }
         } catch (error: any) {
-          console.error('Erro ao buscar CEP:', error);
           showMessage(error.message || 'Erro ao buscar CEP. Tente novamente.', 'error');
           return null;
         }
-      } else if (cleanCEP.length < 8) {
-        return {
-          street: '',
-          district: '',
-          city: '',
-          state: '',
-          country: 'Brasil',
-        };
       }
     }
     return null;
@@ -77,9 +58,6 @@ export default function CadastrarImobiliariaPage() {
 
   const handleSubmit = async (data: any) => {
     try {
-      console.log('📤 Enviando dados da imobiliária...', data);
-      
-      // Formatar os dados para o endpoint
       const formattedData = {
         trade_name: data.trade_name,
         legal_name: data.legal_name,
@@ -99,40 +77,24 @@ export default function CadastrarImobiliariaPage() {
             complement: data.complement || null,
           }
         ],
-        contacts: [
-          {
-            contact: data.contact_name || null,
-            phone: data.phone?.replace(/\D/g, ''),
-            cellphone: data.cellphone?.replace(/\D/g, ''), // ← NOVO CAMPO
-            email: data.email,
-            // REMOVIDO: whatsapp: data.whatsapp || false,
-          }
-        ]
+        contacts: data.contacts?.map((c: any) => ({
+            contact: c.contact || null,
+            phone: c.phone?.replace(/\D/g, '') || null,
+            email: c.email || null,
+            cellphone: c.cellphone?.replace(/\D/g, '') || null,
+        })) || []
       };
 
-      console.log('📊 Dados formatados:', formattedData);
-
       const API_URL = process.env.NEXT_PUBLIC_URL_API;
-      const method = 'POST';
       const url = `${API_URL}/agencies`;
 
       const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formattedData),
       });
 
-      const responseText = await response.text();
-      console.log('📥 Resposta:', response.status, responseText);
-
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error('Resposta inválida do servidor');
-      }
+      const result = await response.json();
 
       if (!response.ok) {
         if (response.status === 409 && result.message?.includes('CNPJ')) {
@@ -144,7 +106,6 @@ export default function CadastrarImobiliariaPage() {
       return result;
 
     } catch (error: any) {
-      console.error('❌ Erro no submit:', error);
       throw new Error(`Erro ao salvar imobiliária: ${error.message}`);
     }
   };
@@ -162,10 +123,7 @@ export default function CadastrarImobiliariaPage() {
           placeholder: 'Nome comercial da imobiliária',
           autoFocus: true,
           icon: <Building size={20} />,
-          validation: {
-            minLength: 3,
-            maxLength: 100,
-          },
+          validation: { minLength: 3, maxLength: 100 },
           className: 'col-span-full',
         },
         {
@@ -175,10 +133,7 @@ export default function CadastrarImobiliariaPage() {
           required: true,
           placeholder: 'Nome jurídico completo',
           icon: <FileText size={20} />,
-          validation: {
-            minLength: 3,
-            maxLength: 200,
-          },
+          validation: { minLength: 3, maxLength: 200 },
           className: 'col-span-full',
         },
         {
@@ -195,14 +150,14 @@ export default function CadastrarImobiliariaPage() {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
-          placeholder: 'Digite a inscrição estadual',
+          placeholder: 'Inscrição estadual',
           icon: <FileText size={20} />,
         },
         {
           field: 'municipal_registration',
           label: 'Inscrição Municipal',
           type: 'text',
-          placeholder: 'Digite a inscrição municipal',
+          placeholder: 'Inscrição municipal',
           icon: <FileText size={20} />,
         },
         {
@@ -220,121 +175,39 @@ export default function CadastrarImobiliariaPage() {
       title: 'Endereço',
       icon: <MapPin size={20} />,
       fields: [
-        {
-          field: 'zip_code',
-          label: 'CEP',
-          type: 'text',
-          required: true,
-          placeholder: '00000-000',
-          mask: 'cep',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'street',
-          label: 'Rua',
-          type: 'text',
-          required: true,
-          placeholder: 'Rua das Flores',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-          className: 'col-span-full',
-        },
-        {
-          field: 'number',
-          label: 'Número',
-          type: 'text',
-          required: true,
-          placeholder: '123',
-          icon: <Hash size={20} />,
-        },
-        {
-          field: 'district',
-          label: 'Bairro',
-          type: 'text',
-          required: true,
-          placeholder: 'Centro',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'city',
-          label: 'Cidade',
-          type: 'text',
-          required: true,
-          placeholder: 'São Paulo',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'state',
-          label: 'Estado',
-          type: 'text',
-          required: true,
-          placeholder: 'SP',
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'country',
-          label: 'País',
-          type: 'text',
-          required: true,
-          placeholder: 'Brasil',
-          defaultValue: 'Brasil',
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        }
+        { field: 'zip_code', label: 'CEP', type: 'text', required: true, placeholder: '00000-000', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
+        { field: 'street', label: 'Rua', type: 'text', required: true, placeholder: 'Rua das Flores', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+        { field: 'number', label: 'Número', type: 'text', required: true, placeholder: '123', icon: <Hash size={20} /> },
+        { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} /> },
+        { field: 'district', label: 'Bairro', type: 'text', required: true, placeholder: 'Centro', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+        { field: 'city', label: 'Cidade', type: 'text', required: true, placeholder: 'São Paulo', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+        { field: 'state', label: 'Estado', type: 'text', required: true, placeholder: 'SP', icon: <Globe size={20} />, disabled: true, readOnly: true },
+        { field: 'country', label: 'País', type: 'text', required: true, placeholder: 'Brasil', defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
       ],
     },
     {
-      title: 'Contato',
+      title: 'Contatos',
       icon: <Phone size={20} />,
       fields: [
         {
-          field: 'contact_name',
-          label: 'Nome do Contato',
-          type: 'text',
-          placeholder: 'Nome da pessoa para contato',
-          icon: <User size={20} />,
+          field: 'contacts',
+          label: 'Lista de Contatos',
+          type: 'custom',
+          defaultValue: [],
           className: 'col-span-full',
-        },
-        {
-          field: 'phone',
-          label: 'Telefone',
-          type: 'tel',
-          placeholder: '(11) 9999-9999',
-          mask: 'telefone',
-          icon: <PhoneIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'cellphone',
-          label: 'Celular',
-          type: 'tel',
-          placeholder: '(11) 99999-9999',
-          mask: 'telefone',
-          icon: <Smartphone size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'email',
-          label: 'E-mail',
-          type: 'email',
-          placeholder: 'contato@imobiliaria.com',
-          icon: <MailIcon size={20} />,
-          className: 'col-span-full',
-        },
+          render: (value: any, formValues: any, onChange: any) => (
+            <ContactManager 
+              value={value} 
+              onChange={onChange} 
+              resourceType="agencies"
+            />
+          )
+        }
       ],
     },
   ], []);
 
-  const onSubmitSuccess = (data: any) => {
+  const onSubmitSuccess = () => {
     showMessage('Imobiliária salva com sucesso!', 'success');
     router.push('/dashboard/imobiliarias');
   };

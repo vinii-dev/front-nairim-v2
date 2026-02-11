@@ -5,16 +5,15 @@ import { useState, useMemo, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMessageContext } from '@/contexts/MessageContext';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   User, MapPin, Phone, FileText, Hash,
   Briefcase, Heart, Globe,
   User as UserIcon, MapPin as MapPinIcon,
-  Phone as PhoneIcon, Mail as MailIcon,
-  Building as BuildingIcon, Smartphone
+  Building as BuildingIcon
 } from 'lucide-react';
 
-// Definindo o tipo localmente caso não exista um arquivo global
 type TenantType = 'fisica' | 'juridica';
 
 type Props = {
@@ -28,7 +27,6 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
   const params = use(searchParams);
   const { showMessage } = useMessageContext();
   
-  // Verificar se o tipo foi selecionado via query params
   const tipoParam = params.tipo;
   const [tipoSelecionado, setTipoSelecionado] = useState<TenantType | null>(null);
 
@@ -41,7 +39,6 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
     setTipoSelecionado(tipoParam);
   }, [tipoParam, router, showMessage]);
 
-  // Handler para mudança de campo - CEP
   const handleFieldChange = async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
@@ -52,15 +49,14 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
           
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Erro ${response.status}`);
+            throw new Error(`Erro ${response.status}`);
           }
 
           const data = await response.json();
           
           if (data.error) {
             showMessage(data.error, 'error');
-            return { street: '', district: '', city: '', state: '', country: 'Brasil' };
+            return null;
           } else {
             showMessage('Endereço preenchido automaticamente!', 'success');
             return {
@@ -72,25 +68,18 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
             };
           }
         } catch (error: any) {
-          console.error('Erro ao buscar CEP:', error);
           showMessage(error.message || 'Erro ao buscar CEP.', 'error');
           return null;
         }
-      } else if (cleanCEP.length < 8) {
-        return { street: '', district: '', city: '', state: '', country: 'Brasil' };
       }
     }
     return null;
   };
 
-  // Handler para submit (create)
   const handleSubmit = async (data: any) => {
     try {
-      console.log('📤 Enviando dados do inquilino...', data);
-      
       const tipo = tipoSelecionado || (data.cpf ? 'fisica' : 'juridica');
       
-      // Formatar os dados
       const formattedData: any = {
         name: data.name,
         internal_code: data.internal_code || null,
@@ -106,22 +95,18 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
             complement: data.complement || null,
           }
         ],
-        contacts: [
-          {
-            contact: data.contact_name || null,
-            phone: data.phone?.replace(/\D/g, ''),
-            email: data.email,
-            cellphone: data.cellphone?.replace(/\D/g, '') || null,
-          }
-        ]
+        contacts: data.contacts?.map((c: any) => ({
+            contact: c.contact || null,
+            phone: c.phone?.replace(/\D/g, '') || null,
+            email: c.email || null,
+            cellphone: c.cellphone?.replace(/\D/g, '') || null,
+        })) || []
       };
 
-      // Lógica específica por tipo
       if (tipo === 'fisica') {
         formattedData.occupation = data.occupation || null;
         formattedData.marital_status = data.marital_status || null;
         formattedData.cpf = data.cpf ? data.cpf.replace(/\D/g, '') : null;
-        // Limpar campos de PJ
         formattedData.cnpj = null;
         formattedData.state_registration = null;
         formattedData.municipal_registration = null;
@@ -129,7 +114,6 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
         formattedData.cnpj = data.cnpj ? data.cnpj.replace(/\D/g, '') : null;
         formattedData.state_registration = data.state_registration || null;
         formattedData.municipal_registration = data.municipal_registration || null;
-        // Limpar campos de PF
         formattedData.occupation = null;
         formattedData.marital_status = null;
         formattedData.cpf = null;
@@ -142,9 +126,7 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
         body: JSON.stringify(formattedData),
       });
 
-      const responseText = await response.text();
-      let result;
-      try { result = JSON.parse(responseText); } catch (e) { throw new Error('Resposta inválida do servidor'); }
+      const result = await response.json();
 
       if (!response.ok) {
         if (response.status === 409) {
@@ -160,12 +142,10 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
       return result;
 
     } catch (error: any) {
-      console.error('❌ Erro no submit:', error);
       throw new Error(`Erro ao salvar inquilino: ${error.message}`);
     }
   };
 
-  // Definir steps baseado no tipo selecionado
   const steps: FormStep[] = useMemo(() => {
     if (!tipoSelecionado) return [];
 
@@ -192,14 +172,11 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
             placeholder: 'Código interno',
             icon: <Hash size={20} />,
           },
-          // Campos Condicionais FÍSICA
           ...(tipoSelecionado === 'fisica' ? [
             {
               field: 'occupation',
               label: 'Profissão',
               type: 'text',
-              required: true,
-              placeholder: 'Profissão',
               icon: <Briefcase size={20} />,
               className: 'col-span-full',
             } as any,
@@ -207,8 +184,6 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
               field: 'marital_status',
               label: 'Estado Civil',
               type: 'text',
-              required: true,
-              placeholder: 'Estado civil',
               icon: <Heart size={20} />,
             } as any,
             {
@@ -216,19 +191,16 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
               label: 'CPF',
               type: 'text',
               required: true,
-              placeholder: '000.000.000-00',
               mask: 'cpf',
               icon: <FileText size={20} />,
             } as any,
           ] : []),
-          // Campos Condicionais JURÍDICA
           ...(tipoSelecionado === 'juridica' ? [
             {
               field: 'cnpj',
               label: 'CNPJ',
               type: 'text',
               required: true,
-              placeholder: '00.000.000/0000-00',
               mask: 'cnpj',
               icon: <FileText size={20} />,
             } as any,
@@ -236,16 +208,12 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
               field: 'state_registration',
               label: 'Inscrição Estadual',
               type: 'text',
-              required: true,
-              placeholder: 'Inscrição estadual',
               icon: <BuildingIcon size={20} />,
             } as any,
             {
               field: 'municipal_registration',
               label: 'Inscrição Municipal',
               type: 'text',
-              required: true,
-              placeholder: 'Inscrição municipal',
               icon: <BuildingIcon size={20} />,
             } as any,
           ] : []),
@@ -255,123 +223,34 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
         title: 'Endereço',
         icon: <MapPin size={20} />,
         fields: [
-          {
-            field: 'zip_code',
-            label: 'CEP',
-            type: 'text',
-            required: true,
-            placeholder: '00000-000',
-            mask: 'cep',
-            icon: <MapPinIcon size={20} />,
-            className: 'col-span-full',
-          },
-          {
-            field: 'street',
-            label: 'Rua',
-            type: 'text',
-            required: true,
-            placeholder: 'Rua',
-            icon: <MapPinIcon size={20} />,
-            disabled: true,
-            readOnly: true,
-            className: 'col-span-full',
-          },
-          {
-            field: 'number',
-            label: 'Número',
-            type: 'text',
-            required: true,
-            placeholder: '123',
-            icon: <Hash size={20} />,
-          },
-          {
-            field: 'complement',
-            label: 'Complemento',
-            type: 'text',
-            placeholder: 'Ap 101',
-            icon: <Hash size={20} />,
-          },
-          {
-            field: 'district',
-            label: 'Bairro',
-            type: 'text',
-            required: true,
-            placeholder: 'Bairro',
-            icon: <MapPinIcon size={20} />,
-            disabled: true,
-            readOnly: true,
-          },
-          {
-            field: 'city',
-            label: 'Cidade',
-            type: 'text',
-            required: true,
-            placeholder: 'Cidade',
-            icon: <MapPinIcon size={20} />,
-            disabled: true,
-            readOnly: true,
-          },
-          {
-            field: 'state',
-            label: 'Estado',
-            type: 'text',
-            required: true,
-            placeholder: 'UF',
-            icon: <Globe size={20} />,
-            disabled: true,
-            readOnly: true,
-          },
-          {
-            field: 'country',
-            label: 'País',
-            type: 'text',
-            required: true,
-            placeholder: 'Brasil',
-            defaultValue: 'Brasil',
-            icon: <Globe size={20} />,
-            disabled: true,
-            readOnly: true,
-          }
+          { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
+          { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+          { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
+          { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} /> },
+          { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+          { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+          { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },
+          { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
         ],
       },
       {
-        title: 'Contato',
+        title: 'Contatos',
         icon: <Phone size={20} />,
         fields: [
           {
-            field: 'contact_name',
-            label: 'Nome do Contato',
-            type: 'text',
-            placeholder: 'Nome para contato',
-            icon: <UserIcon size={20} />,
+            field: 'contacts',
+            label: 'Lista de Contatos',
+            type: 'custom',
+            defaultValue: [],
             className: 'col-span-full',
-          },
-          {
-            field: 'phone',
-            label: 'Telefone',
-            type: 'tel',
-            placeholder: '(00) 0000-0000',
-            mask: 'telefone',
-            icon: <PhoneIcon size={20} />,
-            className: 'col-span-full',
-          },
-          {
-            field: 'cellphone',
-            label: 'Celular',
-            type: 'tel',
-            placeholder: '(00) 00000-0000',
-            mask: 'telefone',
-            icon: <Smartphone size={20} />,
-            className: 'col-span-full',
-          },
-          {
-            field: 'email',
-            label: 'E-mail',
-            type: 'email',
-            placeholder: 'email@exemplo.com',
-            icon: <MailIcon size={20} />,
-            className: 'col-span-full',
-          },
+            render: (value: any, formValues: any, onChange: any) => (
+              <ContactManager 
+                value={value} 
+                onChange={onChange} 
+                resourceType="tenants"
+              />
+            )
+          }
         ],
       },
     ];

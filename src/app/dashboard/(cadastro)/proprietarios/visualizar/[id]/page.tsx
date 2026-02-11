@@ -4,25 +4,23 @@
 import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   User, MapPin, Phone, FileText, Hash,
   Briefcase, Heart, Globe,
   User as UserIcon, MapPin as MapPinIcon,
-  Phone as PhoneIcon, Mail as MailIcon,
-  Building as BuildingIcon, Smartphone
+  Building as BuildingIcon
 } from 'lucide-react';
 
 export default function VisualizarProprietarioPage() {
   const params = useParams();
   const id = params.id as string;
 
-  // Transformar dados da API para o formulário
   const transformData = (apiData: any) => {
     if (!apiData) return {};
     
     const address = apiData.addresses?.[0]?.address || {};
-    const contact = apiData.contacts?.[0]?.contact || {};
     
     return {
       name: apiData.name || '',
@@ -40,10 +38,12 @@ export default function VisualizarProprietarioPage() {
       city: address.city || '',
       state: address.state || '',
       country: address.country || 'Brasil',
-      contact_name: contact.contact || '',
-      phone: contact.phone || '',
-      cellphone: contact.cellphone || '',
-      email: contact.email || '',
+      contacts: apiData.contacts?.map((c: any) => ({
+        contact: c.contact?.contact || c.contact || '', 
+        phone: c.contact?.phone || c.phone || '',
+        cellphone: c.contact?.cellphone || c.cellphone || '',
+        email: c.contact?.email || c.email || '',
+      })) || []
     };
   };
 
@@ -58,9 +58,7 @@ export default function VisualizarProprietarioPage() {
           type: 'text',
           required: true,
           placeholder: 'Nome ou razão social',
-          autoFocus: false,
           icon: <UserIcon size={20} />,
-          validation: { minLength: 3, maxLength: 200 },
           className: 'col-span-full',
           readOnly: true,
         },
@@ -71,66 +69,58 @@ export default function VisualizarProprietarioPage() {
           placeholder: 'Código interno',
           icon: <Hash size={20} />,
           readOnly: true,
-          hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
+          hidden: (formValues: any) => !formValues.internal_code,
         },
-        // CAMPOS PF
         {
           field: 'occupation',
           label: 'Profissão',
           type: 'text',
-          placeholder: 'Profissão',
           icon: <Briefcase size={20} />,
           className: 'col-span-full',
           readOnly: true,
-          hidden: (formValues: any) => !formValues.occupation || formValues.occupation.trim() === '',
+          hidden: (formValues: any) => !formValues.occupation,
         },
         {
           field: 'marital_status',
           label: 'Estado Civil',
           type: 'text',
-          placeholder: 'Estado civil',
           icon: <Heart size={20} />,
           readOnly: true,
-          hidden: (formValues: any) => !formValues.marital_status || formValues.marital_status.trim() === '',
+          hidden: (formValues: any) => !formValues.marital_status,
         },
         {
           field: 'cpf',
           label: 'CPF',
           type: 'text',
-          placeholder: '000.000.000-00',
           mask: 'cpf',
           icon: <FileText size={20} />,
           readOnly: true,
-          hidden: (formValues: any) => !formValues.cpf || formValues.cpf.trim() === '',
+          hidden: (formValues: any) => !formValues.cpf,
         },
-        // CAMPOS PJ
         {
           field: 'cnpj',
           label: 'CNPJ',
           type: 'text',
-          placeholder: '00.000.000/0000-00',
           mask: 'cnpj',
           icon: <FileText size={20} />,
           readOnly: true,
-          hidden: (formValues: any) => !formValues.cnpj || formValues.cnpj.trim() === '',
+          hidden: (formValues: any) => !formValues.cnpj,
         },
         {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
-          placeholder: 'Digite a inscrição estadual',
           icon: <BuildingIcon size={20} />,
           readOnly: true,
-          hidden: (formValues: any) => !formValues.state_registration || formValues.state_registration.trim() === '',
+          hidden: (formValues: any) => !formValues.state_registration,
         },
         {
           field: 'municipal_registration',
           label: 'Inscrição Municipal',
           type: 'text',
-          placeholder: 'Digite a inscrição municipal',
           icon: <BuildingIcon size={20} />,
           readOnly: true,
-          hidden: (formValues: any) => !formValues.municipal_registration || formValues.municipal_registration.trim() === '',
+          hidden: (formValues: any) => !formValues.municipal_registration,
         },
       ],
     },
@@ -138,118 +128,32 @@ export default function VisualizarProprietarioPage() {
       title: 'Endereço',
       icon: <MapPin size={20} />,
       fields: [
-        {
-          field: 'zip_code',
-          label: 'CEP',
-          type: 'text',
-          required: true,
-          placeholder: '00000-000',
-          mask: 'cep',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'street',
-          label: 'Rua',
-          type: 'text',
-          required: true,
-          placeholder: 'Rua das Flores',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'number',
-          label: 'Número',
-          type: 'text',
-          required: true,
-          placeholder: '123',
-          icon: <Hash size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'district',
-          label: 'Bairro',
-          type: 'text',
-          required: true,
-          placeholder: 'Centro',
-          icon: <MapPinIcon size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'city',
-          label: 'Cidade',
-          type: 'text',
-          required: true,
-          placeholder: 'São Paulo',
-          icon: <MapPinIcon size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'state',
-          label: 'Estado',
-          type: 'text',
-          required: true,
-          placeholder: 'SP',
-          icon: <Globe size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'country',
-          label: 'País',
-          type: 'text',
-          required: true,
-          placeholder: 'Brasil',
-          defaultValue: 'Brasil',
-          icon: <Globe size={20} />,
-          readOnly: true,
-        }
+        { field: 'zip_code', label: 'CEP', type: 'text', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
+        { field: 'street', label: 'Rua', type: 'text', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
+        { field: 'number', label: 'Número', type: 'text', icon: <Hash size={20} />, readOnly: true },
+        { field: 'district', label: 'Bairro', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
+        { field: 'city', label: 'Cidade', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
+        { field: 'state', label: 'Estado', type: 'text', icon: <Globe size={20} />, readOnly: true },
+        { field: 'country', label: 'País', type: 'text', icon: <Globe size={20} />, readOnly: true }
       ],
     },
     {
-      title: 'Contato',
+      title: 'Contatos',
       icon: <Phone size={20} />,
       fields: [
-        // CORREÇÃO: Removido o hidden daqui também
         {
-          field: 'contact_name',
-          label: 'Nome do Contato',
-          type: 'text',
-          placeholder: 'Nome da pessoa para contato',
-          icon: <UserIcon size={20} />,
+          field: 'contacts',
+          label: 'Lista de Contatos',
+          type: 'custom',
           className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'phone',
-          label: 'Telefone',
-          type: 'tel',
-          placeholder: '(11) 9999-9999',
-          mask: 'telefone',
-          icon: <PhoneIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'cellphone',
-          label: 'Celular',
-          type: 'tel',
-          placeholder: '(11) 99999-9999',
-          mask: 'telefone',
-          icon: <Smartphone size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'email',
-          label: 'E-mail',
-          type: 'email',
-          placeholder: 'contato@imobiliaria.com',
-          icon: <MailIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
+          render: (value: any) => (
+            <ContactManager 
+              value={value} 
+              resourceType="owners"
+              readOnly={true}
+            />
+          )
+        }
       ],
     },
   ], []);

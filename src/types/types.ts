@@ -69,7 +69,8 @@ export interface FormFieldDef {
   min?: number;
   max?: number;
   rows?: number;
-  render?: (value: any, formValues?: any) => React.ReactNode;
+  // CORREÇÃO: Adicionado onChange como terceiro parâmetro opcional
+  render?: (value: any, formValues?: any, onChange?: (value: any) => void) => React.ReactNode;
 }
 
 export interface FormStep {
@@ -119,8 +120,6 @@ export interface MetricResponse {
   tenantsTotal: MetricWithData;
   propertiesPerOwner: MetricWithData;
   agenciesTotal: MetricWithData;
-  
-  // ADICIONADOS PARA CORRIGIR ERROS DE TIPAGEM
   vacancyRate: MetricWithData;
   occupationRate: MetricWithData;
 

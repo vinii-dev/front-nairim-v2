@@ -6,13 +6,12 @@ import { useMemo } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   User, MapPin, Phone, FileText, Hash,
   Briefcase, Heart, Globe,
-  User as UserIcon, MapPin as MapPinIcon,
-  Phone as PhoneIcon, Mail as MailIcon,
-  Building as BuildingIcon, Smartphone
+  Building as BuildingIcon
 } from 'lucide-react';
 
 export default function EditarProprietarioPage() {
@@ -22,7 +21,6 @@ export default function EditarProprietarioPage() {
   const { showMessage } = useMessageContext();
   const router = useRouter();
 
-  // Handler para mudança de campo - CEP
   const handleFieldChange = async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
@@ -32,16 +30,13 @@ export default function EditarProprietarioPage() {
           showMessage('Buscando CEP...', 'info');
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
           
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Erro ${response.status}`);
-          }
+          if (!response.ok) throw new Error('Erro ao buscar CEP');
 
           const data = await response.json();
           
           if (data.error) {
             showMessage(data.error, 'error');
-            return { street: '', district: '', city: '', state: '', country: 'Brasil' };
+            return null;
           } else {
             showMessage('Endereço preenchido automaticamente!', 'success');
             return {
@@ -62,7 +57,6 @@ export default function EditarProprietarioPage() {
     return null;
   };
 
-  // Handler para submit (edit)
   const handleSubmit = async (data: any) => {
     try {
       console.log('✏️ Atualizando proprietário...', data);
@@ -83,14 +77,12 @@ export default function EditarProprietarioPage() {
             country: data.country || 'Brasil',
           }
         ],
-        contacts: [
-          {
-            contact: data.contact_name || null,
-            phone: data.phone?.replace(/\D/g, ''),
-            email: data.email,
-            cellphone: data.cellphone?.replace(/\D/g, '') || null,
-          }
-        ]
+        contacts: data.contacts?.map((c: any) => ({
+            contact: c.contact || null,
+            phone: c.phone?.replace(/\D/g, '') || null,
+            email: c.email || null,
+            cellphone: c.cellphone?.replace(/\D/g, '') || null,
+        })) || []
       };
 
       if (tipo === 'fisica') {
@@ -116,35 +108,29 @@ export default function EditarProprietarioPage() {
         body: JSON.stringify(formattedData),
       });
 
-      const responseText = await response.text();
-      let result;
-      try { result = JSON.parse(responseText); } catch (e) { throw new Error('Resposta inválida'); }
+      const result = await response.json();
 
       if (!response.ok) {
-        if (response.status === 400 && result.errors) {
-          throw new Error(`Erro de validação: ${result.errors.join(', ')}`);
-        }
+        if (response.status === 400 && result.errors) throw new Error(`Erro: ${result.errors.join(', ')}`);
         if (response.status === 409) {
           if (result.message?.includes('CPF')) throw new Error('CPF já cadastrado');
           if (result.message?.includes('CNPJ')) throw new Error('CNPJ já cadastrado');
         }
-        throw new Error(result.message || `Erro ${response.status}`);
+        throw new Error(result.message || 'Erro ao atualizar');
       }
 
       return result;
 
     } catch (error: any) {
       console.error('❌ Erro na edição:', error);
-      throw new Error(`Erro ao atualizar proprietário: ${error.message}`);
+      throw new Error(`Erro ao atualizar: ${error.message}`);
     }
   };
 
-  // Transformar dados da API para o formulário
   const transformData = (apiData: any) => {
     if (!apiData) return {};
     
     const address = apiData.addresses?.[0]?.address || {};
-    const contact = apiData.contacts?.[0]?.contact || {};
     
     return {
       name: apiData.name || '',
@@ -162,10 +148,12 @@ export default function EditarProprietarioPage() {
       city: address.city || '',
       state: address.state || '',
       country: address.country || 'Brasil',
-      contact_name: contact.contact || '',
-      phone: contact.phone || '',
-      cellphone: contact.cellphone || '',
-      email: contact.email || '',
+      contacts: apiData.contacts?.map((c: any) => ({
+        contact: c.contact?.contact || c.contact || '', 
+        phone: c.contact?.phone || c.phone || '',
+        cellphone: c.contact?.cellphone || c.cellphone || '',
+        email: c.contact?.email || c.email || '',
+      })) || []
     };
   };
 
@@ -180,9 +168,6 @@ export default function EditarProprietarioPage() {
           type: 'text',
           required: true,
           placeholder: 'Nome ou razão social',
-          autoFocus: true,
-          icon: <UserIcon size={20} />,
-          validation: { minLength: 3, maxLength: 200 },
           className: 'col-span-full',
         },
         {
@@ -193,7 +178,6 @@ export default function EditarProprietarioPage() {
           icon: <Hash size={20} />,
           hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
         },
-        // CAMPOS PF
         {
           field: 'occupation',
           label: 'Profissão',
@@ -220,7 +204,6 @@ export default function EditarProprietarioPage() {
           icon: <FileText size={20} />,
           hidden: (formValues: any) => !formValues.cpf,
         },
-        // CAMPOS PJ
         {
           field: 'cnpj',
           label: 'CNPJ',
@@ -234,7 +217,7 @@ export default function EditarProprietarioPage() {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
-          placeholder: 'Digite a inscrição estadual',
+          placeholder: 'Inscrição estadual',
           icon: <BuildingIcon size={20} />,
           hidden: (formValues: any) => !formValues.state_registration,
         },
@@ -242,7 +225,7 @@ export default function EditarProprietarioPage() {
           field: 'municipal_registration',
           label: 'Inscrição Municipal',
           type: 'text',
-          placeholder: 'Digite a inscrição municipal',
+          placeholder: 'Inscrição municipal',
           icon: <BuildingIcon size={20} />,
           hidden: (formValues: any) => !formValues.municipal_registration,
         },
@@ -252,117 +235,32 @@ export default function EditarProprietarioPage() {
       title: 'Endereço',
       icon: <MapPin size={20} />,
       fields: [
-        {
-          field: 'zip_code',
-          label: 'CEP',
-          type: 'text',
-          required: true,
-          placeholder: '00000-000',
-          mask: 'cep',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'street',
-          label: 'Rua',
-          type: 'text',
-          required: true,
-          placeholder: 'Rua das Flores',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-          className: 'col-span-full',
-        },
-        {
-          field: 'number',
-          label: 'Número',
-          type: 'text',
-          required: true,
-          placeholder: '123',
-          icon: <Hash size={20} />,
-        },
-        {
-          field: 'district',
-          label: 'Bairro',
-          type: 'text',
-          required: true,
-          placeholder: 'Centro',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'city',
-          label: 'Cidade',
-          type: 'text',
-          required: true,
-          placeholder: 'São Paulo',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'state',
-          label: 'Estado',
-          type: 'text',
-          required: true,
-          placeholder: 'SP',
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'country',
-          label: 'País',
-          type: 'text',
-          required: true,
-          placeholder: 'Brasil',
-          defaultValue: 'Brasil',
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        }
+        { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', className: 'col-span-full' },
+        { field: 'street', label: 'Rua', type: 'text', required: true, disabled: true, readOnly: true, className: 'col-span-full' },
+        { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
+        { field: 'district', label: 'Bairro', type: 'text', required: true, disabled: true, readOnly: true },
+        { field: 'city', label: 'Cidade', type: 'text', required: true, disabled: true, readOnly: true },
+        { field: 'state', label: 'Estado', type: 'text', required: true, disabled: true, readOnly: true, icon: <Globe size={20} /> },
+        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', disabled: true, readOnly: true, icon: <Globe size={20} /> }
       ],
     },
     {
-      title: 'Contato',
+      title: 'Contatos',
       icon: <Phone size={20} />,
       fields: [
-        // CORREÇÃO: Removido o hidden daqui
         {
-          field: 'contact_name',
-          label: 'Nome do Contato',
-          type: 'text',
-          placeholder: 'Nome da pessoa para contato',
-          icon: <UserIcon size={20} />,
+          field: 'contacts',
+          label: 'Lista de Contatos',
+          type: 'custom',
           className: 'col-span-full',
-        },
-        {
-          field: 'phone',
-          label: 'Telefone',
-          type: 'tel',
-          placeholder: '(11) 9999-9999',
-          mask: 'telefone',
-          icon: <PhoneIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'cellphone',
-          label: 'Celular',
-          type: 'tel',
-          placeholder: '(11) 99999-9999',
-          mask: 'telefone',
-          icon: <Smartphone size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'email',
-          label: 'E-mail',
-          type: 'email',
-          placeholder: 'contato@imobiliaria.com',
-          icon: <MailIcon size={20} />,
-          className: 'col-span-full',
-        },
+          render: (value: any, formValues: any, onChange: any) => (
+            <ContactManager 
+              value={value} 
+              onChange={onChange} 
+              resourceType="owners"
+            />
+          )
+        }
       ],
     },
   ], []);

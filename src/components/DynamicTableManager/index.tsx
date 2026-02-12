@@ -88,8 +88,6 @@ export default function DynamicTableManager({
   }, [columns]);
 
   const { items, meta } = useMemo(() => {
-    console.log('📊 Dados recebidos:', data);
-    
     if (!data) {
       return { items: [], meta: null };
     }
@@ -125,7 +123,6 @@ export default function DynamicTableManager({
       };
     }
     
-    console.error('❌ Estrutura de dados desconhecida:', data);
     return { items: [], meta: null };
   }, [data, state.limit]);
 
@@ -136,7 +133,6 @@ export default function DynamicTableManager({
 
   const getNestedValue = useCallback((obj: any, path: string) => {
     if (!obj || !path) return undefined;
-    
     try {
       return path.split('.').reduce((acc, key) => {
         const arrayMatch = key.match(/(\w+)\[(\d+)\]/);
@@ -148,7 +144,6 @@ export default function DynamicTableManager({
         return acc?.[key];
       }, obj);
     } catch (error) {
-      console.error(`Error accessing nested path ${path}:`, error);
       return undefined;
     }
   }, []);
@@ -160,22 +155,14 @@ export default function DynamicTableManager({
 
     if (column.formatter) {
       switch (column.formatter) {
-        case 'currency':
-          return formatCurrency(value);
-        case 'date':
-          return formatDate(value);
-        case 'cpfCnpj':
-          return formatCPFCNPJ(value);
-        case 'gender':
-          return formatGender(value);
-        case 'phone':
-          return formatPhone(value);
-        case 'boolean':
-          return value ? 'Sim' : 'Não';
-        case 'cep':
-          return formatCEP(value);
-        default:
-          return String(value);
+        case 'currency': return formatCurrency(value);
+        case 'date': return formatDate(value);
+        case 'cpfCnpj': return formatCPFCNPJ(value);
+        case 'gender': return formatGender(value);
+        case 'phone': return formatPhone(value);
+        case 'boolean': return value ? 'Sim' : 'Não';
+        case 'cep': return formatCEP(value);
+        default: return String(value);
       }
     }
 
@@ -189,29 +176,22 @@ export default function DynamicTableManager({
 
   const getCellValue = useCallback((item: any, column: ColumnDef) => {
     try {
-      // -------------------------------------------------------------------------
-      // 1. REFATORAÇÃO: TRATAMENTO DE LISTA DE CONTATOS (UM ABAIXO DO OUTRO)
-      // -------------------------------------------------------------------------
       const contactFields = ['contact', 'telephone', 'phone', 'cellphone', 'email', 'contact_name'];
       
       if (contactFields.includes(column.field)) {
         if (item.contacts && Array.isArray(item.contacts) && item.contacts.length > 0) {
           return (
-            <div className="flex flex-col gap-1 py-1">
+            <div className="flex flex-col gap-1 w-full">
               {item.contacts.map((contact: any, index: number) => {
                 let rawValue = '';
-                
                 if (column.field === 'contact' || column.field === 'contact_name') rawValue = contact.contact;
                 else if (column.field === 'email') rawValue = contact.email;
                 else if (column.field === 'telephone' || column.field === 'phone') rawValue = contact.phone;
                 else if (column.field === 'cellphone') rawValue = contact.cellphone;
 
-                // Formata o valor individualmente
                 const formattedValue = formatValue(rawValue, column, item);
-                
-                // Exibe mesmo se for vazio para manter o alinhamento com a lista ao lado
                 return (
-                  <div key={index} className="h-5 flex items-center justify-center whitespace-nowrap text-xs">
+                  <div key={index} className="flex items-center justify-start whitespace-nowrap text-xs h-[20px]">
                      <span className={!rawValue ? "text-gray-300" : ""}>
                         {formattedValue !== '-' ? formattedValue : '-'}
                      </span>
@@ -223,10 +203,6 @@ export default function DynamicTableManager({
         }
         return '-';
       }
-
-      // -------------------------------------------------------------------------
-      // LÓGICA PADRÃO PARA OUTROS CAMPOS
-      // -------------------------------------------------------------------------
 
       const isUser = resource === 'users';
       if (isUser && ['name', 'email', 'gender', 'birth_date', 'created_at'].includes(column.field)) {
@@ -256,7 +232,6 @@ export default function DynamicTableManager({
         if (column.field === "type") return formatValue(item.type?.description, column, item);
       }
 
-      // Campos de Endereço Genéricos (Primeiro endereço)
       const addressFieldMap: Record<string, {path: string, field: string}> = {
         'zip_code': { path: 'addresses[0].address', field: 'zip_code' },
         'state': { path: 'addresses[0].address', field: 'state' },
@@ -272,7 +247,6 @@ export default function DynamicTableManager({
         return formatValue(getNestedValue(item, `${path}.${field}`), column, item);
       }
 
-      // Fallback para campos diretos
       if (column.field in item) {
         const value = item[column.field];
         if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -289,7 +263,6 @@ export default function DynamicTableManager({
       return '-';
       
     } catch (error) {
-      console.error(`Erro ao obter valor da coluna ${column.field}:`, error);
       return '-';
     }
   }, [formatValue, getNestedValue, resource]);
@@ -380,30 +353,25 @@ export default function DynamicTableManager({
         : `Tem certeza que deseja remover este ${title.toLowerCase()}?`,
       async () => {
         if (!selectedCheckboxes.length) return;
-
         try {
           let successCount = 0;
           let errorCount = 0;
-          
           for (const id of selectedCheckboxes) {
             try {
               const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/${resource}/${id}`, {
                 method: 'DELETE',
               });
-              
               if (response.ok) successCount++;
               else errorCount++;
             } catch {
               errorCount++;
             }
           }
-          
           if (errorCount === 0) {
             showMessage(selectedCheckboxes.length > 1 ? `${successCount} registros removidos com sucesso!` : "Registro removido com sucesso!", "success");
           } else {
             showMessage(`${successCount} de ${selectedCheckboxes.length} registros removidos. ${errorCount} erros.`, "info");
           }
-          
           refreshData();
           setSelectedCheckboxes([]);
         } catch {
@@ -588,46 +556,47 @@ export default function DynamicTableManager({
           {items.map((item: any) => (
             <tr
               key={item.id}
-              className="bg-white hover:bg-gray-50 text-[#111111B2] text-center relative border-b border-gray-100 cursor-pointer align-top"
+              className="bg-white hover:bg-gray-50 text-[#111111B2] text-center relative border-b border-gray-100 cursor-pointer h-[30px]"
               onClick={() => onRowClick?.(item)}
             >
-              <td className="py-2 px-2 sticky left-0 bg-white z-10 border-r border-gray-100">
-                <div className="flex items-center justify-start gap-2 h-full">
-                  {enableDelete && (
-                    <input 
-                      type="checkbox" 
-                      className="inp-checkbox-select rounded border-gray-300 ml-1" 
-                      value={item.id} 
-                      id={`item-${item.id}`}
-                      checked={selectedCheckboxes.includes(item.id)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        handleCheckboxChange(item.id);
-                      }}
-                    />
-                  )}
-                  <div 
-                    className="truncate max-w-[150px] text-sm text-left" 
-                    title={getCellValue(item, dataColumns[0]) as string}
-                  >
-                    {getCellValue(item, dataColumns[0])}
+              <td className="p-0 sticky left-0 z-20 bg-white border-b border-gray-100 h-[30px] w-auto align-top">
+                <div className="relative w-full h-[30px] group">
+                  <div className="absolute top-0 left-0 w-full min-h-[30px] h-full bg-white flex items-center px-2 gap-2 transition-all duration-100 group-hover:h-auto group-hover:min-h-fit group-hover:w-max group-hover:min-w-full group-hover:shadow-lg group-hover:z-50 group-hover:border group-hover:border-gray-200 overflow-hidden border-r border-gray-100">
+                    {enableDelete && (
+                      <input 
+                        type="checkbox" 
+                        className="inp-checkbox-select rounded border-gray-300 shrink-0" 
+                        value={item.id} 
+                        id={`item-${item.id}`}
+                        checked={selectedCheckboxes.includes(item.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleCheckboxChange(item.id);
+                        }}
+                      />
+                    )}
+                    <div className="truncate text-sm text-left max-w-[150px] group-hover:max-w-none group-hover:whitespace-normal">
+                      {getCellValue(item, dataColumns[0])}
+                    </div>
                   </div>
                 </div>
               </td>
               
               {dataColumns.slice(1).map((column) => (
-                <td key={column.field} className="py-2 px-2 align-top">
-                  <div className={`flex flex-col h-full justify-${column.align === 'right' ? 'start items-end' : column.align === 'left' ? 'start items-start' : 'center items-center'}`}>
-                    <div className="w-full">
-                      {getCellValue(item, column)}
+                <td key={column.field} className="p-0 border-b border-gray-100 h-[30px] relative align-top">
+                  <div className="relative w-full h-[30px] group">
+                    <div className={`absolute top-0 left-0 w-full min-h-[30px] h-full bg-white flex items-center px-2 transition-all duration-100 group-hover:h-auto group-hover:min-h-fit group-hover:w-max group-hover:min-w-full group-hover:max-w-[400px] group-hover:shadow-lg group-hover:z-50 group-hover:border group-hover:border-gray-200 overflow-hidden ${column.align === 'right' ? 'justify-end' : column.align === 'left' ? 'justify-start' : 'justify-center'}`}>
+                      <div className={`w-full truncate max-w-[150px] group-hover:max-w-none group-hover:whitespace-normal ${column.align === 'right' ? 'text-right' : column.align === 'left' ? 'text-left' : 'text-center'}`}>
+                        {getCellValue(item, column)}
+                      </div>
                     </div>
                   </div>
                 </td>
               ))}
               
               {(enableView || enableEdit) && (
-                <td className="py-2 px-2 sticky right-0 bg-white z-10 border-l border-gray-100 align-middle">
-                  <div className="flex items-center justify-center gap-2">
+                <td className="px-2 sticky right-0 bg-white z-20 border-l border-gray-100 align-middle h-[30px]">
+                  <div className="flex items-center justify-center gap-2 h-full">
                     {enableView && (
                       <Link 
                         href={`${basePath}/visualizar/${item.id}`} 

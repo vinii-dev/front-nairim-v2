@@ -1,6 +1,8 @@
 // src/components/Ui/Form.tsx
 'use client';
 
+import React, { forwardRef } from 'react';
+
 interface FormProps {
   onSubmit?: (e: React.FormEvent) => void;
   children: React.ReactNode;
@@ -9,13 +11,13 @@ interface FormProps {
   svg?: React.ReactNode;
 }
 
-export default function Form({
+const Form = forwardRef<HTMLFormElement, FormProps>(({
   onSubmit,
   children,
   className,
   title,
   svg,
-}: FormProps) {
+}, ref) => {
   return (
     <div className="flex flex-col">
       {title && (
@@ -25,6 +27,7 @@ export default function Form({
         </h1>
       )}
       <form
+        ref={ref}
         onSubmit={onSubmit}
         className={className ? className : "flex flex-col gap-5"}
       >
@@ -32,4 +35,8 @@ export default function Form({
       </form>
     </div>
   );
-}
+});
+
+Form.displayName = 'Form';
+
+export default Form;

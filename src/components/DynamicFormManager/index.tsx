@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Section from '@/components/Section';
 import Form from '@/components/Ui/Form';
@@ -55,6 +55,7 @@ export default function DynamicFormManager({
 }: DynamicFormManagerProps) {
   const router = useRouter();
   const { showMessage } = useMessageContext();
+  const formRef = useRef<HTMLFormElement>(null);
   
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -64,7 +65,6 @@ export default function DynamicFormManager({
   const [internalCompletedSteps, setInternalCompletedSteps] = useState<number[]>([]);
   
   const isViewMode = mode === 'view';
-  
   const completedSteps = externalCompletedSteps || internalCompletedSteps;
 
   const getCurrentFields = (): FormFieldDef[] => {
@@ -78,6 +78,33 @@ export default function DynamicFormManager({
   const currentFields = getCurrentFields();
   const hasSteps = !!steps && steps.length > 1;
   const isLastStep = hasSteps ? currentStep === steps.length - 1 : true;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formRef.current) {
+        const focusableElements = formRef.current.querySelectorAll(
+          'input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        
+        const firstElement = Array.from(focusableElements).find(
+          (el) => !el.hasAttribute('disabled')
+        ) as HTMLElement;
+
+        if (firstElement) {
+          firstElement.focus();
+          
+          if (firstElement instanceof HTMLInputElement && (firstElement.type === 'text' || firstElement.type === 'email' || firstElement.type === 'number')) {
+            const valueLength = firstElement.value.length;
+            if (valueLength > 0) {
+              firstElement.setSelectionRange(valueLength, valueLength);
+            }
+          }
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [currentStep, loading]);
 
   const validateStep = useCallback((stepIndex: number, data: any): boolean => {
     if (!steps) return true;
@@ -337,8 +364,6 @@ export default function DynamicFormManager({
 
   const handleChange = async (fieldName: string, value: any) => {
     if (isViewMode) return;
-    
-    console.log(`Campo alterado: ${fieldName} =`, value, 'Tipo:', typeof value);
     
     const updatedValues = { ...formValues, [fieldName]: value };
     setFormValues(updatedValues);
@@ -804,6 +829,7 @@ export default function DynamicFormManager({
         )}
 
         <Form
+          ref={formRef}
           className="flex flex-col gap-3"
           title={currentStepData?.title || `Dados do ${title}`}
           onSubmit={handleSubmit}

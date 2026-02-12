@@ -28,10 +28,10 @@ interface DynamicFormManagerProps {
   transformResponse?: (data: any) => any;
   onSubmit?: (data: any) => Promise<any>;
   onFieldChange?: (fieldName: string, value: any) => Promise<any>;
+  onFormValuesChange?: (values: any) => void;
   completedSteps?: number[];
   onStepComplete?: (stepIndex: number) => void;
   canNavigateToStep?: (targetStep: number, currentStep: number, data: any) => boolean;
-  onFormValuesChange?: (values: any) => void;
 }
 
 export default function DynamicFormManager({
@@ -49,6 +49,9 @@ export default function DynamicFormManager({
   onSubmit,
   onFieldChange,
   onFormValuesChange,
+  completedSteps: externalCompletedSteps,
+  onStepComplete,
+  canNavigateToStep: externalCanNavigateToStep,
 }: DynamicFormManagerProps) {
   const router = useRouter();
   const { showMessage } = useMessageContext();
@@ -58,10 +61,12 @@ export default function DynamicFormManager({
   const [currentStep, setCurrentStep] = useState(0);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [isViewMode, setIsViewMode] = useState(mode === 'view');
+  const [internalCompletedSteps, setInternalCompletedSteps] = useState<number[]>([]);
+  
+  const isViewMode = mode === 'view';
+  
+  const completedSteps = externalCompletedSteps || internalCompletedSteps;
 
-  // Função para obter campos atuais com segurança
   const getCurrentFields = (): FormFieldDef[] => {
     if (steps && steps.length > 0) {
       const currentStepData = steps[currentStep];
@@ -74,7 +79,6 @@ export default function DynamicFormManager({
   const hasSteps = !!steps && steps.length > 1;
   const isLastStep = hasSteps ? currentStep === steps.length - 1 : true;
 
-  // Validação de campos obrigatórios para cada passo
   const validateStep = useCallback((stepIndex: number, data: any): boolean => {
     if (!steps) return true;
     
@@ -102,12 +106,13 @@ export default function DynamicFormManager({
     return true;
   }, [steps, isViewMode]);
 
-  // Verifica se pode navegar para um passo
   const canNavigateToStep = (targetStep: number): boolean => {
-    // Sempre permite voltar
+    if (externalCanNavigateToStep) {
+      return externalCanNavigateToStep(targetStep, currentStep, formValues);
+    }
+
     if (targetStep < currentStep) return true;
     
-    // Para avançar, verifica se o passo atual está completo
     if (targetStep > currentStep) {
       const isCurrentStepValid = validateStep(currentStep, formValues);
       if (!isCurrentStepValid && !isViewMode) {
@@ -115,16 +120,14 @@ export default function DynamicFormManager({
         return false;
       }
       
-      // Se avançando, marca o passo atual como completo
-      if (!completedSteps.includes(currentStep)) {
-        setCompletedSteps(prev => [...prev, currentStep]);
+      if (!externalCompletedSteps && !internalCompletedSteps.includes(currentStep)) {
+        setInternalCompletedSteps(prev => [...prev, currentStep]);
       }
     }
     
     return true;
   };
 
-  // Handler para clique em um passo na barra de progresso
   const handleStepClick = (targetStep: number) => {
     if (targetStep === currentStep) return;
     
@@ -133,21 +136,18 @@ export default function DynamicFormManager({
     }
   };
 
-  // Atualiza o estado de campos baseado nos campos preenchidos
   useEffect(() => {
-    if (!hasSteps || isViewMode) return;
+    if (!hasSteps || isViewMode || externalCompletedSteps) return;
 
     const isCurrentStepComplete = validateStep(currentStep, formValues);
     
-    if (isCurrentStepComplete && !completedSteps.includes(currentStep)) {
-      setCompletedSteps(prev => [...prev, currentStep]);
+    if (isCurrentStepComplete && !internalCompletedSteps.includes(currentStep)) {
+      setInternalCompletedSteps(prev => [...prev, currentStep]);
     }
-  }, [formValues, currentStep, completedSteps, hasSteps, validateStep, isViewMode]);
+  }, [formValues, currentStep, internalCompletedSteps, hasSteps, validateStep, isViewMode, externalCompletedSteps]);
 
-  // Inicializar valores
   useEffect(() => {
     const initialValues: Record<string, any> = {};
-    
     const allFields = steps ? steps.flatMap(step => step.fields || []) : fields || [];
     
     allFields.forEach(field => {
@@ -163,6 +163,7 @@ export default function DynamicFormManager({
             initialValues[field.field] = 0;
             break;
           case 'file':
+          case 'custom':
             initialValues[field.field] = [];
             break;
           default:
@@ -174,7 +175,6 @@ export default function DynamicFormManager({
     setFormValues(initialValues);
   }, [steps, fields]);
 
-  // Buscar dados para edição/visualização
   useEffect(() => {
     if (mode !== 'create' && id) {
       const fetchData = async () => {
@@ -187,34 +187,24 @@ export default function DynamicFormManager({
           }
 
           const data = await response.json();
-          console.log('📥 Dados recebidos da API:', data);
-          
           const apiData = data.data || data;
-          console.log('📊 Dados da API (apiData):', apiData);
-          
           const formData = transformData ? transformData(apiData) : apiData;
-          console.log('🔄 Dados transformados (formData):', formData);
-          
           const updatedValues: Record<string, any> = {};
           
           const allFields = steps ? steps.flatMap(step => step.fields || []) : fields || [];
-          console.log('📋 Todos os campos:', allFields.map(f => f.field));
           
           allFields.forEach(field => {
             const value = formData[field.field];
-            console.log(`🔍 Campo: ${field.field}, Valor:`, value);
             if (value !== undefined && value !== null) {
               updatedValues[field.field] = value;
             }
           });
           
-          console.log('✅ Valores atualizados:', updatedValues);
           setFormValues((prev: Record<string, any>) => ({ ...prev, ...updatedValues }));
 
-          // Em modo edição/view, marca todos os passos como completos
-          if (steps) {
+          if (steps && !externalCompletedSteps) {
             const allStepsCompleted = steps.map((_, index) => index);
-            setCompletedSteps(allStepsCompleted);
+            setInternalCompletedSteps(allStepsCompleted);
           }
 
         } catch (error) {
@@ -228,9 +218,8 @@ export default function DynamicFormManager({
 
       fetchData();
     }
-  }, [mode, id, resource, router, showMessage, title, basePath, transformData, steps, fields]);
+  }, [mode, id, resource, router, showMessage, title, basePath, transformData, steps, fields, externalCompletedSteps]);
 
-  // Funções de validação
   const validateField = (field: FormFieldDef, value: any): string | null => {
     if (isViewMode) return null;
     
@@ -306,16 +295,54 @@ export default function DynamicFormManager({
     return Object.keys(newErrors).length === 0;
   };
 
+  const validateAllSteps = (): boolean => {
+    if (isViewMode) return true;
+    
+    const allFields = steps ? steps.flatMap(step => step.fields || []) : fields || [];
+    const newErrors: Record<string, string> = {};
+    
+    allFields.forEach(field => {
+      let isHidden = false;
+      if (typeof field.hidden === 'function') {
+        isHidden = field.hidden(formValues);
+      } else if (field.hidden === true) {
+        isHidden = true;
+      }
+      
+      if (isHidden) return;
+      
+      const error = validateField(field, formValues[field.field]);
+      if (error) {
+        if (field.field === 'password' || field.field === 'password_confirm') {
+          newErrors[field.field] = error;
+        } else {
+          newErrors[field.field] = error;
+        }
+      }
+    });
+    
+    setErrors(prev => {
+      const filteredPrev = Object.keys(prev)
+        .filter(key => key !== 'password' && key !== 'password_confirm')
+        .reduce((obj, key) => {
+          obj[key] = prev[key];
+          return obj;
+        }, {} as Record<string, string>);
+      
+      return { ...filteredPrev, ...newErrors };
+    });
+    
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleChange = async (fieldName: string, value: any) => {
     if (isViewMode) return;
     
     console.log(`Campo alterado: ${fieldName} =`, value, 'Tipo:', typeof value);
     
     const updatedValues = { ...formValues, [fieldName]: value };
-    
     setFormValues(updatedValues);
 
-    // Notificar componente pai sobre mudanças nos valores
     if (onFormValuesChange) {
       onFormValuesChange(updatedValues);
     }
@@ -336,7 +363,6 @@ export default function DynamicFormManager({
           const newUpdatedValues = { ...updatedValues, ...result };
           setFormValues(newUpdatedValues);
           
-          // Notificar componente pai sobre as atualizações do onFieldChange
           if (onFormValuesChange) {
             onFormValuesChange(newUpdatedValues);
           }
@@ -346,11 +372,10 @@ export default function DynamicFormManager({
       }
     }
 
-    if (hasSteps) {
+    if (hasSteps && !externalCompletedSteps) {
       const isCurrentStepComplete = validateStep(currentStep, updatedValues);
-      
-      if (isCurrentStepComplete && !completedSteps.includes(currentStep)) {
-        setCompletedSteps(prev => [...prev, currentStep]);
+      if (isCurrentStepComplete && !internalCompletedSteps.includes(currentStep)) {
+        setInternalCompletedSteps(prev => [...prev, currentStep]);
       }
     }
   };
@@ -359,8 +384,12 @@ export default function DynamicFormManager({
     if (!hasSteps) return true;
     
     if (validateCurrentStep()) {
-      if (!completedSteps.includes(currentStep)) {
-        setCompletedSteps(prev => [...prev, currentStep]);
+      if (onStepComplete) {
+        onStepComplete(currentStep);
+      }
+      
+      if (!externalCompletedSteps && !internalCompletedSteps.includes(currentStep)) {
+        setInternalCompletedSteps(prev => [...prev, currentStep]);
       }
       
       if (currentStep < steps!.length - 1) {
@@ -380,293 +409,228 @@ export default function DynamicFormManager({
     }
   };
 
-// Na função handleSubmit, modifique para exibir erros de senha no popup:
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  if (isViewMode) return;
-  
-  // Validação específica para campos de senha
-  const passwordError = errors['password'] || errors['password_confirm'];
-  if (passwordError) {
-    showMessage(passwordError, 'error');
-    return;
-  }
-  
-  if (hasSteps) {
-    if (!validateCurrentStep()) {
-      showMessage('Por favor, corrija os erros no formulário.', 'error');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isViewMode) return;
+    
+    const passwordError = errors['password'] || errors['password_confirm'];
+    if (passwordError) {
+      showMessage(passwordError, 'error');
       return;
     }
     
-    if (!isLastStep) {
-      if (handleNextStep()) {
+    if (hasSteps) {
+      if (!validateCurrentStep()) {
+        showMessage('Por favor, corrija os erros no formulário.', 'error');
         return;
       }
-    }
-  }
-  
-  if (!validateAllSteps()) {
-    showMessage('Por favor, corrija os erros no formulário.', 'error');
-    return;
-  }
-
-  setSubmitting(true);
-  
-  try {
-    if (onSubmit) {
-      const result = await onSubmit(formValues);
       
-      showMessage(
-        result.message || `${title} ${mode === 'create' ? 'criado' : 'atualizado'} com sucesso!`,
-        'success'
-      );
-
-      if (onSubmitSuccess) {
-        onSubmitSuccess(result.data || result);
-      } else {
-        router.push(basePath);
-      }
-    } else {
-      const url = mode === 'create' 
-        ? `${process.env.NEXT_PUBLIC_URL_API}/${resource}`
-        : `${process.env.NEXT_PUBLIC_URL_API}/${resource}/${id}`;
-
-      const method = mode === 'create' ? 'POST' : 'PUT';
-      
-      const dataToSend = transformResponse ? transformResponse(formValues) : formValues;
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dataToSend),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Erro ao ${mode === 'create' ? 'criar' : 'atualizar'}`);
-      }
-
-      const result = await response.json();
-      
-      showMessage(
-        result.message || `${title} ${mode === 'create' ? 'criado' : 'atualizado'} com sucesso!`,
-        'success'
-      );
-
-      if (onSubmitSuccess) {
-        onSubmitSuccess(result.data || result);
-      } else {
-        router.push(basePath);
-      }
-    }
-  } catch (error: any) {
-    console.error('Erro no formulário:', error);
-    showMessage(error.message || `Erro ao salvar ${title.toLowerCase()}.`, 'error');
-  } finally {
-    setSubmitting(false);
-  }
-};
-
-  // Modifique também a função validateAllSteps para não incluir erros de senha no estado errors:
-  const validateAllSteps = (): boolean => {
-    if (isViewMode) return true;
-    
-    const allFields = steps ? steps.flatMap(step => step.fields || []) : fields || [];
-    const newErrors: Record<string, string> = {};
-    
-    allFields.forEach(field => {
-      let isHidden = false;
-      if (typeof field.hidden === 'function') {
-        isHidden = field.hidden(formValues);
-      } else if (field.hidden === true) {
-        isHidden = true;
-      }
-      
-      if (isHidden) return;
-      
-      const error = validateField(field, formValues[field.field]);
-      if (error) {
-        // Não armazena erros de senha no estado, será tratado no popup
-        if (field.field === 'password' || field.field === 'password_confirm') {
-          // Armazena apenas para validação, mas não no estado de erros
-          newErrors[field.field] = error;
-        } else {
-          newErrors[field.field] = error;
+      if (!isLastStep) {
+        if (handleNextStep()) {
+          return;
         }
       }
-    });
+    }
     
-    // Para campos de senha, não limpe o estado de erros completamente
-    setErrors(prev => {
-      const filteredPrev = Object.keys(prev)
-        .filter(key => key !== 'password' && key !== 'password_confirm')
-        .reduce((obj, key) => {
-          obj[key] = prev[key];
-          return obj;
-        }, {} as Record<string, string>);
-      
-      return { ...filteredPrev, ...newErrors };
-    });
+    if (!validateAllSteps()) {
+      showMessage('Por favor, corrija os erros no formulário.', 'error');
+      return;
+    }
+
+    setSubmitting(true);
     
-    return Object.keys(newErrors).length === 0;
+    try {
+      if (onSubmit) {
+        const result = await onSubmit(formValues);
+        
+        showMessage(
+          result.message || `${title} ${mode === 'create' ? 'criado' : 'atualizado'} com sucesso!`,
+          'success'
+        );
+
+        if (onSubmitSuccess) {
+          onSubmitSuccess(result.data || result);
+        } else {
+          router.push(basePath);
+        }
+      } else {
+        const url = mode === 'create' 
+          ? `${process.env.NEXT_PUBLIC_URL_API}/${resource}`
+          : `${process.env.NEXT_PUBLIC_URL_API}/${resource}/${id}`;
+
+        const method = mode === 'create' ? 'POST' : 'PUT';
+        const dataToSend = transformResponse ? transformResponse(formValues) : formValues;
+
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(dataToSend),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Erro ao ${mode === 'create' ? 'criar' : 'atualizar'}`);
+        }
+
+        const result = await response.json();
+        
+        showMessage(
+          result.message || `${title} ${mode === 'create' ? 'criado' : 'atualizado'} com sucesso!`,
+          'success'
+        );
+
+        if (onSubmitSuccess) {
+          onSubmitSuccess(result.data || result);
+        } else {
+          router.push(basePath);
+        }
+      }
+    } catch (error: any) {
+      console.error('Erro no formulário:', error);
+      showMessage(error.message || `Erro ao salvar ${title.toLowerCase()}.`, 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-    const shouldRenderField = (field: FormFieldDef): boolean => {
-      if (field.hidden === true) return false;
-      
-      if (typeof field.hidden === 'function') {
-        try {
-          return !field.hidden(formValues);
-        } catch (error) {
-          console.error('Erro ao verificar se campo está oculto:', error);
-          return true;
-        }
+  const shouldRenderField = (field: FormFieldDef): boolean => {
+    if (field.hidden === true) return false;
+    
+    if (typeof field.hidden === 'function') {
+      try {
+        return !field.hidden(formValues);
+      } catch (error) {
+        console.error('Erro ao verificar se campo está oculto:', error);
+        return true;
       }
-      
-      return true;
+    }
+    
+    return true;
+  };
+
+  const renderField = (field: FormFieldDef, index: number) => {
+    const value = formValues[field.field] || '';
+    const error = errors[field.field];
+    const isDisabled = isViewMode || field.disabled || loading || submitting;
+    const isReadOnly = isViewMode || field.readOnly;
+
+    if (!shouldRenderField(field)) {
+      return null;
+    }
+
+    let shouldDisable = isDisabled;
+    
+    if (hasSteps && currentStep === 1 && !completedSteps.includes(0) && !isViewMode && !externalCompletedSteps) {
+      shouldDisable = true;
+    }
+
+    const commonProps = {
+      id: field.field,
+      label: field.label,
+      required: field.required,
+      placeholder: field.placeholder,
+      disabled: shouldDisable,
+      value: value,
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => handleChange(field.field, e.target.value),
+      tabIndex: field.tabIndex,
+      autoFocus: field.autoFocus,
+      svg: field.icon,
+      mask: field.mask,
+      maxLength: field.maxLength,
+      showIncrementButtons: field.type === 'number' && field.showIncrementButtons,
+      min: field.min,
+      max: field.max,
     };
 
-    const renderField = (field: FormFieldDef, index: number) => {
-      const value = formValues[field.field] || '';
-      const error = errors[field.field];
-      const isDisabled = isViewMode || field.disabled || loading || submitting;
-      const isReadOnly = isViewMode || field.readOnly;
+    switch (field.type) {
+      case 'text':
+      case 'email':
+      case 'tel':
+      case 'number':
+      case 'date':
+        return (
+          <div 
+            key={`${field.field}-${index}`} 
+            className={`${field.className || ''} min-w-0`}
+          >
+            <Input
+              {...commonProps}
+              type={field.type}
+            />
+            {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+          </div>
+        );
 
-      if (!shouldRenderField(field)) {
-        return null;
-      }
-
-      let shouldDisable = isDisabled;
-      
-      if (hasSteps && currentStep === 1 && !completedSteps.includes(0) && !isViewMode) {
-        shouldDisable = true;
-      }
-
-      const commonProps = {
-        id: field.field,
-        label: field.label,
-        required: field.required,
-        placeholder: field.placeholder,
-        disabled: shouldDisable,
-        value: value,
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => handleChange(field.field, e.target.value),
-        tabIndex: field.tabIndex,
-        autoFocus: field.autoFocus,
-        svg: field.icon,
-        mask: field.mask,
-        maxLength: field.maxLength,
-        showIncrementButtons: field.type === 'number' && field.showIncrementButtons,
-        min: field.min,
-        max: field.max,
-      };
-
-      switch (field.type) {
-        case 'text':
-        case 'email':
-        case 'tel':
-        case 'number':
-        case 'date':
+      case 'password':
+        const isPasswordField = field.field === 'password';
+        const isConfirmField = field.field === 'password_confirm';
+        
+        const otherField = isPasswordField 
+          ? currentFields.find(f => f.field === 'password_confirm')
+          : isConfirmField
+            ? currentFields.find(f => f.field === 'password')
+            : null;
+        
+        if (isPasswordField && otherField) {
+          const confirmField = otherField;
+          const confirmValue = formValues[confirmField.field] || '';
+          
           return (
             <div 
-              key={`${field.field}-${index}`} 
-              className={`${field.className || ''} min-w-0`}
+              key={`password-group-${index}`}
+              className={`flex flex-col md:flex-row gap-3 w-full ${field.className || ''}`}
+              style={{ flexBasis: '100%' }}
             >
-              <Input
-                {...commonProps}
-                type={field.type}
-              />
-              {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+              <div className="min-w-0">
+                <Input
+                  {...commonProps}
+                  type="password"
+                  password
+                />
+                {field.validation?.patternMessage && !error && (
+                  <p className="text-gray-500 text-xs mt-1 absolute">
+                    {field.validation.patternMessage}
+                  </p>
+                )}
+                {error && <p className="text-red-500 text-sm mt-1 absolute">{error}</p>}
+              </div>
+              
+              <div className="min-w-0">
+                <Input
+                  id={confirmField.field}
+                  label={confirmField.label}
+                  required={confirmField.required}
+                  type="password"
+                  password
+                  placeholder={confirmField.placeholder}
+                  disabled={shouldDisable}
+                  value={confirmValue}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                    handleChange(confirmField.field, e.target.value)
+                  }
+                />
+              </div>
             </div>
           );
-
-  case 'password':
-    // Verificar se é password ou password_confirm
-    const isPasswordField = field.field === 'password';
-    const isConfirmField = field.field === 'password_confirm';
-    
-    // Encontrar o campo complementar
-    const otherField = isPasswordField 
-      ? currentFields.find(f => f.field === 'password_confirm')
-      : isConfirmField
-        ? currentFields.find(f => f.field === 'password')
-        : null;
-    
-    // Se for password e existir password_confirm no mesmo grupo, renderizar juntos
-    if (isPasswordField && otherField) {
-      
-      const confirmField = otherField;
-      const confirmValue = formValues[confirmField.field] || '';
-      
-      return (
-        <div 
-          key={`password-group-${index}`}
-          className={`flex flex-col md:flex-row gap-3 w-full ${field.className || ''}`}
-          style={{ flexBasis: '100%' }}
-        >
-          {/* Campo Senha */}
-          <div className="min-w-0">
+        }
+        
+        if (isConfirmField) return null;
+        
+        return (
+          <div 
+            key={`${field.field}-${index}`} 
+            className={`${field.className || ''} w-full`}
+          >
             <Input
               {...commonProps}
               type="password"
               password
             />
-            {/* REMOVIDO: Exibição de erro abaixo do campo */}
-            {/* {error && <p className="text-red-500 text-sm mt-1 absolute">{error}</p>} */}
-            {field.validation?.patternMessage && !error && (
-              <p className="text-gray-500 text-xs mt-1 absolute">
-                {field.validation.patternMessage}
-              </p>
-            )}
-
-            {error && <p className="text-red-500 text-sm mt-1 absolute">{error}</p>}
           </div>
-          
-          {/* Campo Confirmar Senha */}
-          <div className="min-w-0">
-            <Input
-              id={confirmField.field}
-              label={confirmField.label}
-              required={confirmField.required}
-              type="password"
-              password
-              placeholder={confirmField.placeholder}
-              disabled={shouldDisable}
-              value={confirmValue}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                handleChange(confirmField.field, e.target.value)
-              }
-            />
-            {/* REMOVIDO: Exibição de erro abaixo do campo */}
-            {/* {confirmError && <p className="text-red-500 text-sm mt-1">{confirmError}</p>} */}
-          </div>
-        </div>
-      );
-    }
-    
-    // Se for password_confirm mas o password já foi renderizado, pular
-    if (isConfirmField) {
-      return null;
-    }
-    
-    // Para outros campos password (não pareados)
-    return (
-      <div 
-        key={`${field.field}-${index}`} 
-        className={`${field.className || ''} w-full`}
-      >
-        <Input
-          {...commonProps}
-          type="password"
-          password
-        />
-        {/* REMOVIDO: Exibição de erro abaixo do campo */}
-        {/* {error && <p className="text-red-500 text-sm mt-1">{error}</p>} */}
-      </div>
-    );
+        );
 
       case 'select':
         return (
@@ -774,7 +738,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               {field.label}
             </label>
             <div className="mt-1">
-              {field.render ? field.render(value, formValues) : null}
+              {field.render ? field.render(value, formValues, (newValue: any) => handleChange(field.field, newValue)) : null}
             </div>
           </div>
         );
@@ -826,7 +790,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       hrefText="Voltar"
     >
       <div className="bg-[#fff] p-5 rounded-xl" style={{ boxShadow: '0px 4px 8px 3px rgba(0, 0, 0, 0.15)' }}>
-        {/* Barra de progresso - SEMPRE MOSTRAR */}
         {hasSteps && (
           <ProgressBar
             steps={steps!.map((step, index) => ({

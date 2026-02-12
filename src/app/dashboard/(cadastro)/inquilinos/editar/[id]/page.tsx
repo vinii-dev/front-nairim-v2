@@ -6,13 +6,13 @@ import { useMemo } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   User, MapPin, Phone, FileText, Hash,
-  Home, Mail, Briefcase, Heart, User as UserIcon,
-  MapPin as MapPinIcon, Phone as PhoneIcon, Mail as MailIcon,
-  Building, Globe, Home as HomeIcon,
-  Smartphone
+  Briefcase, Heart, User as UserIcon,
+  MapPin as MapPinIcon,
+  Building as BuildingIcon, Globe
 } from 'lucide-react';
 
 export default function EditarInquilinoPage() {
@@ -22,38 +22,20 @@ export default function EditarInquilinoPage() {
   const { showMessage } = useMessageContext();
   const router = useRouter();
 
-  // Handler para mudança de campo - CEP
   const handleFieldChange = async (fieldName: string, value: any) => {
-    console.log('handleFieldChange:', fieldName, value);
-    
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
-      
       if (cleanCEP.length === 8) {
         try {
           showMessage('Buscando CEP...', 'info');
-          
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`);
-          }
-
+          if (!response.ok) throw new Error(`Erro ${response.status}`);
           const data = await response.json();
-          
           if (data.error) {
             showMessage(data.error, 'error');
-            return {
-              street: '',
-              district: '',
-              city: '',
-              state: '',
-              country: 'Brasil',
-            };
+            return null;
           } else {
-            showMessage('Endereço preenchido automaticamente!', 'success');
-            
+            showMessage('Endereço atualizado!', 'success');
             return {
               street: data.logradouro || '',
               district: data.bairro || '',
@@ -63,38 +45,21 @@ export default function EditarInquilinoPage() {
             };
           }
         } catch (error: any) {
-          console.error('Erro ao buscar CEP:', error);
-          showMessage(error.message || 'Erro ao buscar CEP. Tente novamente.', 'error');
+          showMessage(error.message || 'Erro ao buscar CEP.', 'error');
           return null;
         }
-      } else if (cleanCEP.length < 8) {
-        return {
-          street: '',
-          district: '',
-          city: '',
-          state: '',
-          country: 'Brasil',
-        };
       }
     }
     return null;
   };
 
-  // Handler para submit (edit)
   const handleSubmit = async (data: any) => {
     try {
-      console.log('✏️ Atualizando inquilino...', data);
+      const tipo = data.cpf ? 'fisica' : 'juridica';
       
-      // Formatar os dados para o endpoint
-      const formattedData = {
+      const formattedData: any = {
         name: data.name,
         internal_code: data.internal_code || null,
-        occupation: data.occupation,
-        marital_status: data.marital_status,
-        cnpj: data.cnpj ? data.cnpj.replace(/\D/g, '') : null,
-        cpf: data.cpf ? data.cpf.replace(/\D/g, '') : null,
-        municipal_registration: data.municipal_registration || null,
-        state_registration: data.state_registration || null,
         addresses: [
           {
             zip_code: data.zip_code?.replace(/\D/g, ''),
@@ -107,45 +72,43 @@ export default function EditarInquilinoPage() {
             complement: data.complement || null,
           }
         ],
-        contacts: [
-          {
-            contact: data.contact_name || null,
-            phone: data.phone?.replace(/\D/g, ''),
-            email: data.email,
-            cellphone: data.cellphone?.replace(/\D/g, '')
-          }
-        ]
+        contacts: data.contacts?.map((c: any) => ({
+            contact: c.contact || null,
+            phone: c.phone?.replace(/\D/g, '') || null,
+            email: c.email || null,
+            cellphone: c.cellphone?.replace(/\D/g, '') || null,
+        })) || []
       };
 
-      console.log('📊 Dados formatados para edição:', formattedData);
+      if (tipo === 'fisica') {
+        formattedData.occupation = data.occupation || null;
+        formattedData.marital_status = data.marital_status || null;
+        formattedData.cpf = data.cpf ? data.cpf.replace(/\D/g, '') : null;
+        formattedData.cnpj = null;
+        formattedData.state_registration = null;
+        formattedData.municipal_registration = null;
+      } else {
+        formattedData.cnpj = data.cnpj ? data.cnpj.replace(/\D/g, '') : null;
+        formattedData.state_registration = data.state_registration || null;
+        formattedData.municipal_registration = data.municipal_registration || null;
+        formattedData.occupation = null;
+        formattedData.marital_status = null;
+        formattedData.cpf = null;
+      }
 
       const API_URL = process.env.NEXT_PUBLIC_URL_API;
       const response = await fetch(`${API_URL}/tenants/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formattedData),
       });
 
-      const responseText = await response.text();
-      console.log('📥 Resposta da edição:', response.status, responseText);
-
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error('Resposta inválida do servidor');
-      }
+      const result = await response.json();
 
       if (!response.ok) {
         if (response.status === 409) {
-          if (result.message?.includes('CPF')) {
-            throw new Error('CPF já cadastrado para outro inquilino');
-          }
-          if (result.message?.includes('CNPJ')) {
-            throw new Error('CNPJ já cadastrado para outro inquilino');
-          }
+          if (result.message?.includes('CPF')) throw new Error('CPF já cadastrado');
+          if (result.message?.includes('CNPJ')) throw new Error('CNPJ já cadastrado');
         }
         throw new Error(result.message || `Erro ${response.status}`);
       }
@@ -153,19 +116,13 @@ export default function EditarInquilinoPage() {
       return result;
 
     } catch (error: any) {
-      console.error('❌ Erro na edição:', error);
-      throw new Error(`Erro ao atualizar inquilino: ${error.message}`);
+      throw new Error(`Erro ao atualizar: ${error.message}`);
     }
   };
 
-  // Transformar dados da API para o formulário
   const transformData = (apiData: any) => {
-    console.log('🔄 Transformando dados da API (inquilino):', apiData);
-    
     if (!apiData) return {};
-    
     const address = apiData.addresses?.[0]?.address || {};
-    const contact = apiData.contacts?.[0]?.contact || {};
     
     return {
       name: apiData.name || '',
@@ -184,10 +141,12 @@ export default function EditarInquilinoPage() {
       state: address.state || '',
       country: address.country || 'Brasil',
       complement: address.complement || '',
-      contact_name: contact.contact || '',
-      phone: contact.phone || '',
-      cellphone: contact.cellphone || '',
-      email: contact.email || '',
+      contacts: apiData.contacts?.map((c: any) => ({
+        contact: c.contact?.contact || c.contact || '', 
+        phone: c.contact?.phone || c.phone || '',
+        cellphone: c.contact?.cellphone || c.cellphone || '',
+        email: c.contact?.email || c.email || '',
+      })) || []
     };
   };
 
@@ -198,71 +157,64 @@ export default function EditarInquilinoPage() {
       fields: [
         {
           field: 'name',
-          label: 'Nome',
+          label: 'Nome/Razão Social',
           type: 'text',
           required: true,
-          placeholder: 'Nome completo do inquilino',
-          autoFocus: true,
+          placeholder: 'Nome',
           icon: <UserIcon size={20} />,
-          validation: {
-            minLength: 3,
-            maxLength: 200,
-          },
           className: 'col-span-full',
         },
         {
           field: 'internal_code',
           label: 'Código Interno',
           type: 'text',
-          placeholder: 'Código interno do inquilino',
           icon: <Hash size={20} />,
+          hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
         },
         {
           field: 'occupation',
           label: 'Profissão',
           type: 'text',
-          required: true,
-          placeholder: 'Profissão do inquilino',
           icon: <Briefcase size={20} />,
           className: 'col-span-full',
+          hidden: (formValues: any) => !formValues.occupation,
         },
         {
           field: 'marital_status',
           label: 'Estado Civil',
           type: 'text',
-          required: true,
-          placeholder: 'Estado civil do inquilino',
           icon: <Heart size={20} />,
+          hidden: (formValues: any) => !formValues.marital_status,
         },
         {
           field: 'cpf',
           label: 'CPF',
           type: 'text',
-          placeholder: '000.000.000-00',
           mask: 'cpf',
           icon: <FileText size={20} />,
+          hidden: (formValues: any) => !formValues.cpf,
         },
         {
           field: 'cnpj',
           label: 'CNPJ',
           type: 'text',
-          placeholder: '00.000.000/0000-00',
           mask: 'cnpj',
           icon: <FileText size={20} />,
-        },
-        {
-          field: 'municipal_registration',
-          label: 'Inscrição Municipal',
-          type: 'text',
-          placeholder: 'Digite a inscrição municipal',
-          icon: <Building size={20} />,
+          hidden: (formValues: any) => !formValues.cnpj,
         },
         {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
-          placeholder: 'Digite a inscrição estadual',
-          icon: <Building size={20} />,
+          icon: <BuildingIcon size={20} />,
+          hidden: (formValues: any) => !formValues.state_registration,
+        },
+        {
+          field: 'municipal_registration',
+          label: 'Inscrição Municipal',
+          type: 'text',
+          icon: <BuildingIcon size={20} />,
+          hidden: (formValues: any) => !formValues.municipal_registration,
         },
       ],
     },
@@ -270,121 +222,38 @@ export default function EditarInquilinoPage() {
       title: 'Endereço',
       icon: <MapPin size={20} />,
       fields: [
-        {
-          field: 'zip_code',
-          label: 'CEP',
-          type: 'text',
-          required: true,
-          placeholder: '00000-000',
-          mask: 'cep',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'street',
-          label: 'Rua',
-          type: 'text',
-          required: true,
-          placeholder: 'Rua das Flores',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-          className: 'col-span-full',
-        },
-        {
-          field: 'number',
-          label: 'Número',
-          type: 'text',
-          required: true,
-          placeholder: '123',
-          icon: <Hash size={20} />,
-        },
-        {
-          field: 'district',
-          label: 'Bairro',
-          type: 'text',
-          required: true,
-          placeholder: 'Centro',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'city',
-          label: 'Cidade',
-          type: 'text',
-          required: true,
-          placeholder: 'São Paulo',
-          icon: <MapPinIcon size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'state',
-          label: 'Estado',
-          type: 'text',
-          required: true,
-          placeholder: 'SP',
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        },
-        {
-          field: 'country',
-          label: 'País',
-          type: 'text',
-          required: true,
-          placeholder: 'Brasil',
-          defaultValue: 'Brasil',
-          icon: <Globe size={20} />,
-          disabled: true,
-          readOnly: true,
-        }
+        { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
+        { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+        { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
+        { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} /> },
+        { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+        { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+        { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },
+        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
       ],
     },
     {
-      title: 'Contato',
+      title: 'Contatos',
       icon: <Phone size={20} />,
       fields: [
         {
-          field: 'contact_name',
-          label: 'Nome do Contato',
-          type: 'text',
-          placeholder: 'Nome da pessoa para contato',
-          icon: <User size={20} />,
+          field: 'contacts',
+          label: 'Lista de Contatos',
+          type: 'custom',
           className: 'col-span-full',
-        },
-        {
-          field: 'phone',
-          label: 'Telefone',
-          type: 'tel',
-          placeholder: '(11) 9999-9999',
-          mask: 'telefone',
-          icon: <PhoneIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'cellphone',
-          label: 'Celular',
-          type: 'tel',
-          placeholder: '(11) 99999-9999',
-          mask: 'telefone',
-          icon: <Smartphone size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'email',
-          label: 'E-mail',
-          type: 'email',
-          placeholder: 'contato@imobiliaria.com',
-          icon: <MailIcon size={20} />,
-          className: 'col-span-full',
-        },
+          render: (value: any, formValues: any, onChange: any) => (
+            <ContactManager 
+              value={value} 
+              onChange={onChange} 
+              resourceType="tenants"
+            />
+          )
+        }
       ],
     },
   ], []);
 
-  const onSubmitSuccess = (data: any) => {
+  const onSubmitSuccess = () => {
     showMessage('Inquilino atualizado com sucesso!', 'success');
     router.push('/dashboard/inquilinos');
   };

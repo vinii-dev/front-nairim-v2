@@ -4,27 +4,23 @@
 import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   User, MapPin, Phone, FileText, Hash,
-  Home, Mail, Briefcase, Heart, User as UserIcon,
-  MapPin as MapPinIcon, Phone as PhoneIcon, Mail as MailIcon,
-  Building, Globe, Home as HomeIcon,
-  Smartphone
+  Briefcase, Heart, User as UserIcon,
+  MapPin as MapPinIcon,
+  Building as BuildingIcon, Globe
 } from 'lucide-react';
 
 export default function VisualizarInquilinoPage() {
   const params = useParams();
   const id = params.id as string;
 
-  // Transformar dados da API para o formulário
   const transformData = (apiData: any) => {
-    console.log('🔄 Transformando dados da API (inquilino):', apiData);
-    
     if (!apiData) return {};
     
     const address = apiData.addresses?.[0]?.address || {};
-    const contact = apiData.contacts?.[0]?.contact || {};
     
     return {
       name: apiData.name || '',
@@ -43,10 +39,12 @@ export default function VisualizarInquilinoPage() {
       state: address.state || '',
       country: address.country || 'Brasil',
       complement: address.complement || '',
-      contact_name: contact.contact || '',
-      phone: contact.phone || '',
-      cellphone: contact.cellphone || '',
-      email: contact.email || '',
+      contacts: apiData.contacts?.map((c: any) => ({
+        contact: c.contact?.contact || c.contact || '', 
+        phone: c.contact?.phone || c.phone || '',
+        cellphone: c.contact?.cellphone || c.cellphone || '',
+        email: c.contact?.email || c.email || '',
+      })) || []
     };
   };
 
@@ -63,10 +61,6 @@ export default function VisualizarInquilinoPage() {
           placeholder: 'Nome completo do inquilino',
           autoFocus: true,
           icon: <UserIcon size={20} />,
-          validation: {
-            minLength: 3,
-            maxLength: 200,
-          },
           className: 'col-span-full',
           readOnly: true,
         },
@@ -74,62 +68,60 @@ export default function VisualizarInquilinoPage() {
           field: 'internal_code',
           label: 'Código Interno',
           type: 'text',
-          placeholder: 'Código interno do inquilino',
           icon: <Hash size={20} />,
           readOnly: true,
+          hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
         },
         {
           field: 'occupation',
           label: 'Profissão',
           type: 'text',
-          required: true,
-          placeholder: 'Profissão do inquilino',
           icon: <Briefcase size={20} />,
           className: 'col-span-full',
           readOnly: true,
+          hidden: (formValues: any) => !formValues.occupation,
         },
         {
           field: 'marital_status',
           label: 'Estado Civil',
           type: 'text',
-          required: true,
-          placeholder: 'Estado civil do inquilino',
           icon: <Heart size={20} />,
           readOnly: true,
+          hidden: (formValues: any) => !formValues.marital_status,
         },
         {
           field: 'cpf',
           label: 'CPF',
           type: 'text',
-          placeholder: '000.000.000-00',
           mask: 'cpf',
           icon: <FileText size={20} />,
           readOnly: true,
+          hidden: (formValues: any) => !formValues.cpf,
         },
         {
           field: 'cnpj',
           label: 'CNPJ',
           type: 'text',
-          placeholder: '00.000.000/0000-00',
           mask: 'cnpj',
           icon: <FileText size={20} />,
           readOnly: true,
+          hidden: (formValues: any) => !formValues.cnpj,
         },
         {
           field: 'municipal_registration',
           label: 'Inscrição Municipal',
           type: 'text',
-          placeholder: 'Digite a inscrição municipal',
-          icon: <Building size={20} />,
+          icon: <BuildingIcon size={20} />,
           readOnly: true,
+          hidden: (formValues: any) => !formValues.municipal_registration,
         },
         {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
-          placeholder: 'Digite a inscrição estadual',
-          icon: <Building size={20} />,
+          icon: <BuildingIcon size={20} />,
           readOnly: true,
+          hidden: (formValues: any) => !formValues.state_registration,
         },
       ],
     },
@@ -137,113 +129,33 @@ export default function VisualizarInquilinoPage() {
       title: 'Endereço',
       icon: <MapPin size={20} />,
       fields: [
-        {
-          field: 'zip_code',
-          label: 'CEP',
-          type: 'text',
-          required: true,
-          placeholder: '00000-000',
-          mask: 'cep',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'street',
-          label: 'Rua',
-          type: 'text',
-          required: true,
-          placeholder: 'Rua das Flores',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'number',
-          label: 'Número',
-          type: 'text',
-          required: true,
-          placeholder: '123',
-          icon: <Hash size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'district',
-          label: 'Bairro',
-          type: 'text',
-          required: true,
-          placeholder: 'Centro',
-          icon: <MapPinIcon size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'city',
-          label: 'Cidade',
-          type: 'text',
-          required: true,
-          placeholder: 'São Paulo',
-          icon: <MapPinIcon size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'state',
-          label: 'Estado',
-          type: 'text',
-          required: true,
-          placeholder: 'SP',
-          icon: <Globe size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'country',
-          label: 'País',
-          type: 'text',
-          required: true,
-          placeholder: 'Brasil',
-          defaultValue: 'Brasil',
-          icon: <Globe size={20} />,
-          readOnly: true,
-        }
+        { field: 'zip_code', label: 'CEP', type: 'text', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
+        { field: 'street', label: 'Rua', type: 'text', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
+        { field: 'number', label: 'Número', type: 'text', icon: <Hash size={20} />, readOnly: true },
+        { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} />, readOnly: true },
+        { field: 'district', label: 'Bairro', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
+        { field: 'city', label: 'Cidade', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
+        { field: 'state', label: 'Estado', type: 'text', icon: <Globe size={20} />, readOnly: true },
+        { field: 'country', label: 'País', type: 'text', icon: <Globe size={20} />, readOnly: true }
       ],
     },
     {
-      title: 'Contato',
+      title: 'Contatos',
       icon: <Phone size={20} />,
       fields: [
         {
-          field: 'contact_name',
-          label: 'Nome do Contato',
-          type: 'text',
-          placeholder: 'Nome da pessoa para contato',
-          icon: <User size={20} />,
+          field: 'contacts',
+          label: 'Lista de Contatos',
+          type: 'custom',
           className: 'col-span-full',
-        },
-        {
-          field: 'phone',
-          label: 'Telefone',
-          type: 'tel',
-          placeholder: '(11) 9999-9999',
-          mask: 'telefone',
-          icon: <PhoneIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'cellphone',
-          label: 'Celular',
-          type: 'tel',
-          placeholder: '(11) 99999-9999',
-          mask: 'telefone',
-          icon: <Smartphone size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'email',
-          label: 'E-mail',
-          type: 'email',
-          placeholder: 'contato@imobiliaria.com',
-          icon: <MailIcon size={20} />,
-          className: 'col-span-full',
-        },
+          render: (value: any) => (
+            <ContactManager 
+              value={value} 
+              resourceType="tenants"
+              readOnly={true}
+            />
+          )
+        }
       ],
     },
   ], []);

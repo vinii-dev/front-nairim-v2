@@ -3,13 +3,11 @@
 
 import { useMemo } from 'react';
 import DynamicFormManager from '@/components/DynamicFormManager';
+import ContactManager from '@/components/ContactManager';
 import { FormStep } from '@/types/types';
 import {
   Building2, MapPin, Phone, FileText,
-  User, Hash, Globe, Mail,
-  Building, MapPin as MapPinIcon,
-  Phone as PhoneIcon, Mail as MailIcon,
-  Smartphone, Home
+  Hash, Globe, Building, MapPin as MapPinIcon, CheckCircle
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
@@ -18,12 +16,8 @@ export default function VisualizarImobiliariaPage() {
   const id = params.id as string;
 
   const transformData = (apiData: any) => {
-    console.log('🔄 Transformando dados da API:', apiData);
-    
     if (!apiData) return {};
-    
     const address = apiData.addresses?.[0]?.address || {};
-    const contact = apiData.contacts?.[0]?.contact || {};
     
     return {
       trade_name: apiData.trade_name || '',
@@ -40,11 +34,12 @@ export default function VisualizarImobiliariaPage() {
       state: address.state || '',
       country: address.country || 'Brasil',
       complement: address.complement || '',
-      contact_name: contact.contact || '',
-      phone: contact.phone || '',
-      cellphone: contact.cellphone || '', // ← NOVO CAMPO
-      email: contact.email || '',
-      // REMOVIDO: whatsapp: contact.whatsapp || false,
+      contacts: apiData.contacts?.map((c: any) => ({
+        contact: c.contact?.contact || c.contact || '', 
+        phone: c.contact?.phone || c.phone || '',
+        cellphone: c.contact?.cellphone || c.cellphone || '',
+        email: c.contact?.email || c.email || '',
+      })) || []
     };
   };
 
@@ -58,13 +53,7 @@ export default function VisualizarImobiliariaPage() {
           label: 'Nome Fantasia',
           type: 'text',
           required: true,
-          placeholder: 'Nome comercial da imobiliária',
-          autoFocus: true,
           icon: <Building size={20} />,
-          validation: {
-            minLength: 3,
-            maxLength: 100,
-          },
           className: 'col-span-full',
           readOnly: true,
         },
@@ -73,12 +62,7 @@ export default function VisualizarImobiliariaPage() {
           label: 'Razão Social',
           type: 'text',
           required: true,
-          placeholder: 'Nome jurídico completo',
           icon: <FileText size={20} />,
-          validation: {
-            minLength: 3,
-            maxLength: 200,
-          },
           className: 'col-span-full',
           readOnly: true,
         },
@@ -87,7 +71,6 @@ export default function VisualizarImobiliariaPage() {
           label: 'CNPJ',
           type: 'text',
           required: true,
-          placeholder: '00.000.000/0000-00',
           mask: 'cnpj',
           icon: <Hash size={20} />,
           className: 'col-span-full',
@@ -97,7 +80,6 @@ export default function VisualizarImobiliariaPage() {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
-          placeholder: 'Digite a inscrição estadual',
           icon: <FileText size={20} />,
           readOnly: true,
         },
@@ -105,7 +87,6 @@ export default function VisualizarImobiliariaPage() {
           field: 'municipal_registration',
           label: 'Inscrição Municipal',
           type: 'text',
-          placeholder: 'Digite a inscrição municipal',
           icon: <FileText size={20} />,
           readOnly: true,
         },
@@ -114,8 +95,7 @@ export default function VisualizarImobiliariaPage() {
           label: 'CRECI',
           type: 'text',
           required: true,
-          placeholder: 'Número do registro CRECI',
-          icon: <FileText size={20} />,
+          icon: <CheckCircle size={20} />,
           className: 'col-span-full',
           readOnly: true,
         },
@@ -125,127 +105,33 @@ export default function VisualizarImobiliariaPage() {
       title: 'Endereço',
       icon: <MapPin size={20} />,
       fields: [
-        {
-          field: 'zip_code',
-          label: 'CEP',
-          type: 'text',
-          required: true,
-          placeholder: '00000-000',
-          mask: 'cep',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'street',
-          label: 'Rua',
-          type: 'text',
-          required: true,
-          placeholder: 'Rua das Flores',
-          icon: <MapPinIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'number',
-          label: 'Número',
-          type: 'text',
-          required: true,
-          placeholder: '123',
-          icon: <Hash size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'district',
-          label: 'Bairro',
-          type: 'text',
-          required: true,
-          placeholder: 'Centro',
-          icon: <MapPinIcon size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'city',
-          label: 'Cidade',
-          type: 'text',
-          required: true,
-          placeholder: 'São Paulo',
-          icon: <MapPinIcon size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'state',
-          label: 'Estado',
-          type: 'text',
-          required: true,
-          placeholder: 'SP',
-          icon: <Globe size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'country',
-          label: 'País',
-          type: 'text',
-          required: true,
-          placeholder: 'Brasil',
-          defaultValue: 'Brasil',
-          icon: <Globe size={20} />,
-          readOnly: true,
-        },
-        {
-          field: 'complement',
-          label: 'Complemento',
-          type: 'text',
-          placeholder: 'Apto, Sala, Bloco, etc.',
-          icon: <Home size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
+        { field: 'zip_code', label: 'CEP', type: 'text', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
+        { field: 'street', label: 'Rua', type: 'text', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
+        { field: 'number', label: 'Número', type: 'text', icon: <Hash size={20} />, readOnly: true },
+        { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} />, readOnly: true },
+        { field: 'district', label: 'Bairro', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
+        { field: 'city', label: 'Cidade', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
+        { field: 'state', label: 'Estado', type: 'text', icon: <Globe size={20} />, readOnly: true },
+        { field: 'country', label: 'País', type: 'text', icon: <Globe size={20} />, readOnly: true }
       ],
     },
     {
-      title: 'Contato',
+      title: 'Contatos',
       icon: <Phone size={20} />,
       fields: [
         {
-          field: 'contact_name',
-          label: 'Nome do Contato',
-          type: 'text',
-          placeholder: 'Nome da pessoa para contato',
-          icon: <User size={20} />,
+          field: 'contacts',
+          label: 'Lista de Contatos',
+          type: 'custom',
           className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'phone',
-          label: 'Telefone',
-          type: 'tel',
-          placeholder: '(11) 9999-9999',
-          mask: 'telefone',
-          icon: <PhoneIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'cellphone',
-          label: 'Celular',
-          type: 'tel',
-          placeholder: '(11) 99999-9999',
-          mask: 'telefone',
-          icon: <Smartphone size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        {
-          field: 'email',
-          label: 'E-mail',
-          type: 'email',
-          placeholder: 'contato@imobiliaria.com',
-          icon: <MailIcon size={20} />,
-          className: 'col-span-full',
-          readOnly: true,
-        },
-        // REMOVIDO: campo whatsapp
+          render: (value: any) => (
+            <ContactManager 
+              value={value} 
+              resourceType="agencies"
+              readOnly={true}
+            />
+          )
+        }
       ],
     },
   ], []);

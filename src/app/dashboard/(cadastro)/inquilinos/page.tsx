@@ -1,105 +1,104 @@
-// app/dashboard/tenantes/page.tsx - VERSÃO ATUALIZADA
 'use client';
 
 import Section from "@/components/Section";
 import DynamicTableManager from "@/components/DynamicTableManager";
 import { ColumnDef } from "@/types/types";
 
-export default function TenantesPage() {
+export default function InquilinosPage() {
   const columns: ColumnDef[] = [
     {
       field: "name",
       label: "Nome",
-      sortParam: "sort_name",
+      sortParam: "name",
       type: "text"
     },
     {
       field: "internal_code",
       label: "Código Interno",
-      sortParam: "sort_internal_code",
+      sortParam: "internal_code",
       type: "text"
     },
+    // Campos PF
     {
       field: "occupation",
       label: "Profissão",
-      sortParam: "sort_occupation",
+      sortParam: "occupation",
       type: "text"
     },
     {
       field: "marital_status",
       label: "Estado Civil",
-      sortParam: "sort_marital_status",
+      sortParam: "marital_status",
       type: "text"
-    },
-    {
-      field: "cnpj",
-      label: "CNPJ",
-      sortParam: "sort_cnpj",
-      type: "text",
-      formatter: "cpfCnpj"
     },
     {
       field: "cpf",
       label: "CPF",
-      sortParam: "sort_cpf",
+      sortParam: "cpf",
       type: "text",
       formatter: "cpfCnpj"
     },
-    // ADICIONADO: Campos de inscrição estadual e municipal
+    // Campos PJ
+    {
+      field: "cnpj",
+      label: "CNPJ",
+      sortParam: "cnpj",
+      type: "text",
+      formatter: "cpfCnpj"
+    },
     {
       field: "state_registration",
       label: "Inscrição Estadual",
-      sortParam: "sort_state_registration",
       type: "text"
     },
     {
       field: "municipal_registration",
       label: "Inscrição Municipal",
-      sortParam: "sort_municipal_registration",
       type: "text"
     },
+    // Endereço
     {
       field: "zip_code",
       label: "CEP",
       type: "text",
-      sortParam: "sort_zip_code",
+      sortParam: "zip_code",
       formatter: "cep"
     },
     {
       field: "state",
       label: "UF",
       type: "text",
-      sortParam: "sort_state"
+      sortParam: "state"
     },
     {
       field: "city",
       label: "Cidade",
       type: "text",
-      sortParam: "sort_city"
+      sortParam: "city"
     },
     {
       field: "district",
       label: "Bairro",
       type: "text",
-      sortParam: "sort_district"
+      sortParam: "district"
     },
     {
       field: "address",
       label: "Endereço",
       type: "text",
-      sortParam: "sort_address"
+      sortParam: "street"
     },
+    // Contato
     {
       field: "contact",
       label: "Contato",
       type: "text",
-      sortParam: "sort_contact"
+      sortParam: "contact_name"
     },
     {
       field: "telephone",
       label: "Fone",
       type: "text",
-      sortParam: "sort_telephone",
       formatter: "phone"
     },
     {
@@ -113,7 +112,7 @@ export default function TenantesPage() {
       field: "email",
       label: "E-mail",
       type: "text",
-      sortParam: "sort_email"
+      sortParam: "email"
     },
     {
       field: "actions",

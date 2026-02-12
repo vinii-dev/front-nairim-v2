@@ -38,7 +38,6 @@ export default function ApartamentosLocacao() {
     
     const itemsPerPage = 8;
 
-    // Função para formatar valores em reais
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
             style: 'currency',
@@ -47,7 +46,20 @@ export default function ApartamentosLocacao() {
         }).format(value);
     };
 
-    // Função para buscar propriedades da API
+    // Função auxiliar para verificar se é apartamento
+    const isApartment = (property: any): boolean => {
+        // 1. Verifica property_type na raiz
+        if (property.property_type === "apartment") return true;
+        
+        // 2. Verifica dentro de property.type
+        if (property.type) {
+            const typeDesc = property.type.description?.toLowerCase() || property.type.name?.toLowerCase();
+            if (typeDesc?.includes("apartamento") || typeDesc === "apartment") return true;
+        }
+        
+        return false;
+    };
+
     const fetchProperties = async (page: number = 1) => {
         try {
             setLoading(true);
@@ -56,16 +68,14 @@ export default function ApartamentosLocacao() {
             console.log(`Buscando apartamentos - Página ${page}...`);
             console.log('Filtros ativos:', filters);
             
-            // Construir filtros da API baseados nos filtros do contexto
             const apiFilters: any = {
                 page,
                 limit: itemsPerPage,
                 status: "AVAILABLE",
-                property_type: "apartment",
+                property_type: "apartment", // pedimos apartamentos
                 transaction_type: filters.transactionType === "alugar" ? "rent" : "sale",
             };
             
-            // Adicionar filtros do contexto
             if (filters.quartos) apiFilters.bedrooms = filters.quartos;
             if (filters.banheiros) apiFilters.bathrooms = filters.banheiros;
             if (filters.vagas) apiFilters.garage_spaces = filters.vagas;
@@ -80,172 +90,142 @@ export default function ApartamentosLocacao() {
             if (filters.cep) apiFilters.zip_code = filters.cep;
             if (filters.mobilia) apiFilters.furnished = String(filters.mobilia) === "1" || String(filters.mobilia) === "2";
             if (filters.andares) apiFilters.floor = filters.andares;
+            if (filters.dataInicio) apiFilters.available_from = filters.dataInicio;
             
-            // Se tiver data de início, adicionar filtro de disponibilidade
-            if (filters.dataInicio) {
-                apiFilters.available_from = filters.dataInicio;
-            }
-            
-            console.log("Filtros aplicados na API:", apiFilters);
+            console.log("Filtros enviados para API:", apiFilters);
             
             const response = await propertyService.getAllProperties(apiFilters);
+            console.log("Resposta BRUTA da API:", response);
             
-            console.log("Resposta completa da API:", response);
-            console.log("Tipo de response:", typeof response);
-            
-            // Verifica se a resposta é um array ou se tem uma propriedade data que é um array
             let propertiesArray: any[] = [];
             let totalCount = 0;
             let totalPagesCount = 1;
             let currentPageCount = page;
             
             if (Array.isArray(response)) {
-                // Se a resposta já é um array
                 propertiesArray = response;
                 totalCount = response.length;
             } else if (response && typeof response === 'object') {
-                // Extrair dados da resposta baseado na estrutura esperada
-                if (response.data && Array.isArray(response.data)) {
-                    propertiesArray = response.data;
-                } else if (response.properties && Array.isArray(response.properties)) {
-                    propertiesArray = response.properties;
-                } else if (response.items && Array.isArray(response.items)) {
-                    propertiesArray = response.items;
-                } else if (response.results && Array.isArray(response.results)) {
-                    propertiesArray = response.results;
-                }
+                if (response.data && Array.isArray(response.data)) propertiesArray = response.data;
+                else if (response.properties && Array.isArray(response.properties)) propertiesArray = response.properties;
+                else if (response.items && Array.isArray(response.items)) propertiesArray = response.items;
+                else if (response.results && Array.isArray(response.results)) propertiesArray = response.results;
                 
-                // Extrair metadados de paginação
                 totalCount = 
-                    typeof response.total === "number" ? response.total :
-                    typeof response.totalCount === "number" ? response.totalCount :
-                    typeof response.count === "number" ? response.count :
-                    propertiesArray.length;
+                    response.total ?? response.totalCount ?? response.count ?? propertiesArray.length;
                 totalPagesCount = 
-                    typeof response.totalPages === "number" ? response.totalPages :
-                    typeof response.pages === "number" ? response.pages :
-                    Math.ceil(totalCount / itemsPerPage);
+                    response.totalPages ?? response.pages ?? Math.ceil(totalCount / itemsPerPage);
                 currentPageCount = 
-                    typeof response.page === "number" ? response.page :
-                    typeof response.currentPage === "number" ? response.currentPage :
-                    page;
+                    response.page ?? response.currentPage ?? page;
             }
             
-            console.log("Array de propriedades encontrado:", propertiesArray);
-            console.log("Total de resultados:", totalCount);
-            console.log("Total de páginas:", totalPagesCount);
+            console.log(`Propriedades recebidas (antes do filtro): ${propertiesArray.length}`);
             
-            // Se não encontrou propriedades
-            if (!Array.isArray(propertiesArray) || propertiesArray.length === 0) {
-                console.warn("Nenhuma propriedade encontrada ou formato inesperado");
+            // ---------- FILTRO EXTRA: APENAS APARTAMENTOS ----------
+            const onlyApartments = propertiesArray.filter(isApartment);
+            console.log(`Propriedades após filtrar apenas apartamentos: ${onlyApartments.length}`);
+            
+            if (onlyApartments.length === 0) {
                 setApartamentos([]);
                 setTotalPages(totalPagesCount);
-                setTotalResults(totalCount);
+                setTotalResults(totalCount); // pode não refletir a contagem real, mas mantemos o da API
                 return;
             }
             
-            // Mapeia os dados da API para o formato do componente
-            const mappedApartamentos = propertiesArray.map((property: any) => {
-                console.log("Processando propriedade:", property);
+            // ---------- MAPEAMENTO ----------
+            const mappedApartamentos: ApartamentoProps[] = onlyApartments.map((property: any) => {
+                console.log("----- Processando apartamento ID:", property.id);
+                console.log("Objeto completo:", JSON.stringify(property, null, 2));
                 
-                // Tenta pegar a primeira imagem
-                let imagem = "/CasasLocacao.jpg";
-                if (property.images && Array.isArray(property.images) && property.images.length > 0) {
-                    imagem = property.images[0];
-                } else if (property.documents && Array.isArray(property.documents) && property.documents.length > 0) {
-                    const imageDoc = property.documents.find((doc: any) => 
-                        (doc.type === 'IMAGE' || (doc.filename && doc.filename.match(/\.(jpg|jpeg|png|webp)$/i)))
-                    );
-                    if (imageDoc && imageDoc.url) {
-                        imagem = imageDoc.url;
-                    }
-                } else if (property.photos && Array.isArray(property.photos) && property.photos.length > 0) {
-                    imagem = property.photos[0];
-                }
-                
-                // Determinar valores financeiros
-                let rentalValue = 0;
-                let saleValue = 0;
-                let condoFee = 0;
-                
-                if (property.values) {
-                    rentalValue = property.values.rental_value || property.values.rent_value || 0;
-                    saleValue = property.values.sale_value || property.values.purchase_value || 0;
-                    condoFee = property.values.condo_fee || property.values.condominium || 0;
-                } else {
-                    rentalValue = property.rental_value || property.rent_value || property.price_rent || 0;
-                    saleValue = property.sale_value || property.purchase_value || property.price_sale || 0;
-                    condoFee = property.condo_fee || property.condominium || 0;
-                }
-                
-                // Usar valor baseado no tipo de transação
-                const preco = filters.transactionType === "alugar" ? rentalValue : saleValue;
-                
-                // Status da propriedade
-                let propertyStatus = property.status || "AVAILABLE";
-                
-                // Endereço
+                // ----- ENDEREÇO -----
                 let street = "", number = "", district = "", city = "", state = "";
-                if (property.address) {
-                    street = property.address.street || property.address.rua || "";
-                    number = property.address.number || property.address.numero || "";
-                    district = property.address.district || property.address.bairro || "";
-                    city = property.address.city || property.address.cidade || "";
-                    state = property.address.state || property.address.estado || property.address.uf || "";
+                if (property.addresses && property.addresses.length > 0) {
+                    const addr = property.addresses[0].address;
+                    if (addr) {
+                        street = addr.street || "";
+                        number = addr.number?.toString() || "";
+                        district = addr.district || "";
+                        city = addr.city || "";
+                        state = addr.state || "";
+                    }
                 }
                 
-                // Tipo da propriedade
-                let tipo = "Apartamento";
-                if (property.type) {
-                    tipo = property.type.description || property.type.name || property.type;
-                } else if (property.property_type) {
-                    tipo = property.property_type === "apartment" ? "Apartamento" : 
-                           property.property_type === "house" ? "Casa" : 
-                           property.property_type;
+                const local = `${street ? street + ', ' : ''}${number ? number + ' - ' : ''}${district ? district + ', ' : ''}${city ? city + ' - ' : ''}${state || ''}`
+                    .trim()
+                    .replace(/,\s*$/, '') || "Localização não informada";
+                
+                // ----- PREÇO, CONDOMÍNIO, STATUS -----
+                let preco = 0;
+                let condoFee = 0;
+                let propertyStatus = "AVAILABLE";
+                
+                if (property.values && property.values.length > 0) {
+                    const val = property.values[0];
+                    if (filters.transactionType === "alugar") {
+                        preco = parseFloat(val.rental_value) || 0;
+                    } else {
+                        preco = parseFloat(val.purchase_value) || 0;
+                    }
+                    condoFee = parseFloat(val.condo_fee) || 0;
+                    propertyStatus = val.status || "AVAILABLE";
                 }
                 
-                // Características
-                const quartos = property.bedrooms || property.rooms || 0;
-                const banheiros = (property.bathrooms || 0) + (property.half_bathrooms || 0);
-                const vagas = property.garage_spaces || property.parking_spaces || 0;
-                const area = property.area_total || property.area_built || property.area || 0;
-                const mobilia = property.furnished || false;
-                const andar = property.floor_number || property.floor || 0;
-                const condominio = condoFee > 0 || Boolean(property.has_condominium);
+                // ----- TIPO (forçamos "Apartamento") -----
+                const tipo = "Apartamento";
+                
+                // ----- CARACTERÍSTICAS -----
+                const quartos = property.bedrooms ?? 0;
+                const banheiros = (property.bathrooms ?? 0) + (property.half_bathrooms ?? 0);
+                const vagas = property.garage_spaces ?? 0;
+                const area = property.area_built ?? property.area_total ?? 0;
+                const mobilia = property.furnished ?? false;
+                const andar = property.floor_number ?? 0;
+                
+                // ----- IMAGEM -----
+                let imagem = "/CasasLocacao.jpg";
+                if (property.documents && property.documents.length > 0) {
+                    const img = property.documents.find(
+                        (d: any) => d.type === "IMAGE" && d.file_path
+                    );
+                    if (img?.file_path) {
+                        imagem = img.file_path;
+                    }
+                }
                 
                 return {
                     id: property.id || `apart-${Math.random().toString(36).substr(2, 9)}`,
-                    nome: property.title || property.name || `${tipo} em ${district}`,
-                    local: `${street ? street + ', ' : ''}${number ? number + ' - ' : ''}${district ? district + ', ' : ''}${city ? city + ' - ' : ''}${state || ''}`.trim(),
-                    preco: preco,
-                    quartos: quartos,
-                    banheiros: banheiros,
-                    vagas: vagas,
-                    area: area,
-                    mobilia: mobilia,
-                    andar: andar,
-                    condominio: condominio,
+                    nome: property.title || property.name || `${tipo} em ${district || city || "localização"}`,
+                    local,
+                    preco,
+                    quartos,
+                    banheiros,
+                    vagas,
+                    area,
+                    mobilia,
+                    andar,
+                    condominio: condoFee > 0,
                     precoCondominio: condoFee,
                     status: propertyStatus,
-                    imagem: imagem,
+                    imagem,
                     cidade: city || "Não informada",
-                    tipo: tipo,
+                    tipo,
                 };
             });
             
-            console.log("Apartamentos mapeados:", mappedApartamentos);
+            console.log("========= APARTAMENTOS MAPEADOS =========");
+            console.log(mappedApartamentos);
+            console.log("==========================================");
             
             setApartamentos(mappedApartamentos);
             setTotalPages(totalPagesCount);
             setCurrentPage(currentPageCount);
-            setTotalResults(totalCount);
+            setTotalResults(totalCount); // mantém o total original, ou podemos recalcular? Deixamos como está.
             
         } catch (err) {
-            console.error("Erro ao buscar apartamentos:", err);
-            const errorMessage = err instanceof Error ? err.message : "Erro ao conectar com a API";
-            setError(errorMessage);
+            console.error("❌ Erro ao buscar apartamentos:", err);
+            setError(err instanceof Error ? err.message : "Erro ao conectar com a API");
             
-            // Dados de exemplo em caso de erro
+            // ---------- DADOS DE EXEMPLO (APENAS APARTAMENTOS) ----------
             const exampleData = [
                 { id: "1", nome: "Apartamento Moderno", local: "Alphaville, Barueri", preco: 4500, quartos: 3, banheiros: 2, vagas: 2, area: 120, mobilia: true, andar: 12, condominio: true, precoCondominio: 800, status: "AVAILABLE", cidade: "Barueri", tipo: "Apartamento" },
                 { id: "2", nome: "Apartamento Alto Padrão", local: "Morumbi, São Paulo", preco: 6800, quartos: 4, banheiros: 3, vagas: 3, area: 180, mobilia: false, andar: 8, condominio: true, precoCondominio: 1200, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
@@ -257,52 +237,24 @@ export default function ApartamentosLocacao() {
                 { id: "8", nome: "Apartamento Novo", local: "Itaim Bibi, São Paulo", preco: 7100, quartos: 3, banheiros: 2, vagas: 2, area: 110, mobilia: false, andar: 6, condominio: true, precoCondominio: 900, status: "AVAILABLE", cidade: "São Paulo", tipo: "Apartamento" },
             ];
             
-            // Filtrar dados de exemplo baseado nos filtros
+            // Aplica filtros nos dados de exemplo
             let filteredData = [...exampleData];
-            
-            // Filtrar por quartos
-            if (filters.quartos) {
-                filteredData = filteredData.filter(ap => ap.quartos >= Number(filters.quartos));
-            }
-            
-            // Filtrar por banheiros
-            if (filters.banheiros) {
-                filteredData = filteredData.filter(ap => ap.banheiros >= Number(filters.banheiros));
-            }
-            
-            // Filtrar por vagas
-            if (filters.vagas) {
-                filteredData = filteredData.filter(ap => ap.vagas >= Number(filters.vagas));
-            }
-            
-            // Filtrar por valor
+            if (filters.quartos) filteredData = filteredData.filter(ap => ap.quartos >= Number(filters.quartos));
+            if (filters.banheiros) filteredData = filteredData.filter(ap => ap.banheiros >= Number(filters.banheiros));
+            if (filters.vagas) filteredData = filteredData.filter(ap => ap.vagas >= Number(filters.vagas));
             if (filters.valorMin) {
                 const minValor = Number(filters.valorMin.replace(/[^0-9]/g, ''));
                 filteredData = filteredData.filter(ap => ap.preco >= minValor);
             }
-            
             if (filters.valorMax) {
                 const maxValor = Number(filters.valorMax.replace(/[^0-9]/g, ''));
                 filteredData = filteredData.filter(ap => ap.preco <= maxValor);
             }
+            if (filters.areaMin) filteredData = filteredData.filter(ap => ap.area >= Number(filters.areaMin));
+            if (filters.areaMax) filteredData = filteredData.filter(ap => ap.area <= Number(filters.areaMax));
+            if (String(filters.mobilia) === "1") filteredData = filteredData.filter(ap => ap.mobilia === true);
+            else if (String(filters.mobilia) === "0") filteredData = filteredData.filter(ap => ap.mobilia === false);
             
-            // Filtrar por área
-            if (filters.areaMin) {
-                filteredData = filteredData.filter(ap => ap.area >= Number(filters.areaMin));
-            }
-            
-            if (filters.areaMax) {
-                filteredData = filteredData.filter(ap => ap.area <= Number(filters.areaMax));
-            }
-            
-            // Filtrar por mobília
-            if (String(filters.mobilia) === "1") {
-                filteredData = filteredData.filter(ap => ap.mobilia === true);
-            } else if (String(filters.mobilia) === "0") {
-                filteredData = filteredData.filter(ap => ap.mobilia === false);
-            }
-            
-            // Paginar dados filtrados
             const startIndex = (page - 1) * itemsPerPage;
             const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
             
@@ -310,39 +262,28 @@ export default function ApartamentosLocacao() {
             setTotalPages(Math.ceil(filteredData.length / itemsPerPage));
             setCurrentPage(page);
             setTotalResults(filteredData.length);
-            
         } finally {
             setLoading(false);
         }
     };
 
-    // Busca propriedades quando o componente monta ou quando os filtros mudam
     useEffect(() => {
-        // Resetar para página 1 quando os filtros mudam
         setCurrentPage(1);
         fetchProperties(1);
-    }, [filters]); // Dependência nos filtros
+    }, [filters]);
 
-    // Função para mudar de página
     const handlePageChange = (newPage: number) => {
         if (newPage >= 1 && newPage <= totalPages) {
             setCurrentPage(newPage);
             fetchProperties(newPage);
-            
-            // Scroll para o topo da lista
-            window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 
-    // Função para lidar com ver detalhes
     const handleVerDetalhes = (apartamentoId: string) => {
         router.push(`/apartamentos/${apartamentoId}`);
     };
 
-    // Loading skeleton
     if (loading && apartamentos.length === 0) {
         return (
             <div className="w-full py-8">
@@ -353,8 +294,6 @@ export default function ApartamentosLocacao() {
                         </h1>
                         <p className="text-gray-600">Encontre o apartamento ideal para você</p>
                     </div>
-                    
-                    {/* Grid Skeleton */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {[...Array(8)].map((_, index) => (
                             <div key={index} className="bg-white rounded-xl shadow-lg overflow-hidden animate-pulse">
@@ -388,7 +327,7 @@ export default function ApartamentosLocacao() {
                     </h1>
                     <p className="text-gray-600 mb-6">Encontre o apartamento ideal para você</p>
                     
-                    {/* Resumo dos filtros aplicados */}
+                    {/* Filtros ativos */}
                     <div className="mb-6 p-4 bg-purple-50 rounded-lg">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-medium text-purple-800">Filtros ativos:</span>
@@ -432,6 +371,21 @@ export default function ApartamentosLocacao() {
                                     Localização: {filters.location || filters.bairro || filters.uf}
                                 </span>
                             )}
+                            {String(filters.mobilia) === "1" && (
+                                <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
+                                    Mobiliado
+                                </span>
+                            )}
+                            {String(filters.mobilia) === "0" && (
+                                <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
+                                    Não mobiliado
+                                </span>
+                            )}
+                            {filters.andares && (
+                                <span className="px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
+                                    Andar: {filters.andares}
+                                </span>
+                            )}
                         </div>
                     </div>
                     
@@ -459,14 +413,12 @@ export default function ApartamentosLocacao() {
                                 {filters.transactionType === "alugar" ? "Para locação" : "À venda"}
                             </p>
                         </div>
-                        
                         <div className="flex items-center gap-4 mt-4 md:mt-0">
                             {totalPages > 1 && (
                                 <p className="text-sm text-gray-500">
                                     Página {currentPage} de {totalPages}
                                 </p>
                             )}
-                            
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => fetchProperties(currentPage)}
@@ -477,18 +429,7 @@ export default function ApartamentosLocacao() {
                                     Atualizar
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        if (typeof window !== 'undefined') {
-                                            console.log("Estado atual:", { 
-                                                apartamentos, 
-                                                loading, 
-                                                error, 
-                                                totalPages, 
-                                                currentPage,
-                                                filters 
-                                            });
-                                        }
-                                    }}
+                                    onClick={() => console.log("Estado atual:", { apartamentos, loading, error, totalPages, currentPage, filters })}
                                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
                                 >
                                     Debug
@@ -506,7 +447,7 @@ export default function ApartamentosLocacao() {
                                 <div key={apartamento.id} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col border border-gray-100">
                                     {/* Imagem */}
                                     <div className="relative h-48 overflow-hidden">
-                                        {apartamento.imagem ? (
+                                        {apartamento.imagem && apartamento.imagem !== "/CasasLocacao.jpg" ? (
                                             <Image 
                                                 src={apartamento.imagem} 
                                                 alt={apartamento.nome}
@@ -521,23 +462,20 @@ export default function ApartamentosLocacao() {
                                             </div>
                                         )}
                                         
-                                        {/* Badge de condomínio */}
-                                        {apartamento.condominio && apartamento.precoCondominio && (
+                                        {apartamento.condominio && apartamento.precoCondominio && apartamento.precoCondominio > 0 && (
                                             <div className="absolute top-3 left-3">
                                                 <span className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full font-medium">
-                                                    Condomínio: {formatCurrency(apartamento.precoCondominio)}
+                                                    Cond.: {formatCurrency(apartamento.precoCondominio)}
                                                 </span>
                                             </div>
                                         )}
                                         
-                                        {/* Badge de andar */}
                                         <div className="absolute top-3 right-3">
                                             <span className="px-3 py-1 bg-gray-800/80 text-white text-xs rounded-full font-medium backdrop-blur-sm">
                                                 {apartamento.andar}º andar
                                             </span>
                                         </div>
                                         
-                                        {/* Badge de status */}
                                         <div className="absolute bottom-3 left-3">
                                             {apartamento.status === "AVAILABLE" ? (
                                                 <span className="px-3 py-1 bg-green-500 text-white text-xs rounded-full font-medium">
@@ -554,13 +492,10 @@ export default function ApartamentosLocacao() {
                                             )}
                                         </div>
                                         
-                                        {/* Overlay escuro */}
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
                                     </div>
 
-                                    {/* Conteúdo */}
                                     <div className="p-5 flex-grow flex flex-col">
-                                        {/* Nome e Localização */}
                                         <div className="mb-4">
                                             <h3 className="text-lg font-bold text-gray-800 mb-2 line-clamp-1">{apartamento.nome}</h3>
                                             <div className="flex items-start gap-2 text-gray-600">
@@ -569,7 +504,6 @@ export default function ApartamentosLocacao() {
                                             </div>
                                         </div>
 
-                                        {/* Preço */}
                                         <div className="mb-4">
                                             <div className="flex items-baseline gap-2">
                                                 <span className="text-2xl font-bold text-purple-900">
@@ -580,7 +514,7 @@ export default function ApartamentosLocacao() {
                                                 </span>
                                             </div>
                                             
-                                            {apartamento.condominio && apartamento.precoCondominio && (
+                                            {apartamento.condominio && apartamento.precoCondominio && apartamento.precoCondominio > 0 && (
                                                 <p className="text-sm text-gray-600 mt-1">
                                                     + {formatCurrency(apartamento.precoCondominio)} condomínio
                                                 </p>
@@ -601,7 +535,6 @@ export default function ApartamentosLocacao() {
                                             </div>
                                         </div>
 
-                                        {/* Ícones de Características */}
                                         <div className="grid grid-cols-4 gap-4 py-4 border-y border-gray-100 mb-4">
                                             <div className="flex flex-col items-center group cursor-help" title="Quartos">
                                                 <div className="p-2 bg-purple-50 rounded-lg mb-2 group-hover:bg-purple-100 transition-colors">
@@ -610,7 +543,6 @@ export default function ApartamentosLocacao() {
                                                 <span className="text-sm font-medium text-gray-800">{apartamento.quartos}</span>
                                                 <span className="text-xs text-gray-500">Quartos</span>
                                             </div>
-
                                             <div className="flex flex-col items-center group cursor-help" title="Banheiros">
                                                 <div className="p-2 bg-blue-50 rounded-lg mb-2 group-hover:bg-blue-100 transition-colors">
                                                     <Icon icon="mingcute:shower-line" className="w-5 h-5 text-blue-600" />
@@ -618,7 +550,6 @@ export default function ApartamentosLocacao() {
                                                 <span className="text-sm font-medium text-gray-800">{apartamento.banheiros}</span>
                                                 <span className="text-xs text-gray-500">Banheiros</span>
                                             </div>
-
                                             <div className="flex flex-col items-center group cursor-help" title="Vagas de garagem">
                                                 <div className="p-2 bg-green-50 rounded-lg mb-2 group-hover:bg-green-100 transition-colors">
                                                     <Icon icon="mingcute:car-line" className="w-5 h-5 text-green-600" />
@@ -626,7 +557,6 @@ export default function ApartamentosLocacao() {
                                                 <span className="text-sm font-medium text-gray-800">{apartamento.vagas}</span>
                                                 <span className="text-xs text-gray-500">Vagas</span>
                                             </div>
-
                                             <div className="flex flex-col items-center group cursor-help" title="Área total">
                                                 <div className="p-2 bg-yellow-50 rounded-lg mb-2 group-hover:bg-yellow-100 transition-colors">
                                                     <Icon icon="mingcute:ruler-line" className="w-5 h-5 text-yellow-600" />
@@ -636,7 +566,6 @@ export default function ApartamentosLocacao() {
                                             </div>
                                         </div>
 
-                                        {/* Botão de Ação */}
                                         <div className="mt-auto">
                                             <button 
                                                 onClick={() => handleVerDetalhes(apartamento.id)}
@@ -655,7 +584,6 @@ export default function ApartamentosLocacao() {
                                                     </>
                                                 )}
                                             </button>
-                                            
                                             {apartamento.status !== "AVAILABLE" && (
                                                 <p className="text-xs text-gray-500 text-center mt-2">
                                                     {apartamento.status === "RENTED" ? "Este imóvel já foi alugado" : 
@@ -684,16 +612,10 @@ export default function ApartamentosLocacao() {
                                 <div className="flex items-center gap-2">
                                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                                         let pageNum;
-                                        if (totalPages <= 5) {
-                                            pageNum = i + 1;
-                                        } else if (currentPage <= 3) {
-                                            pageNum = i + 1;
-                                        } else if (currentPage >= totalPages - 2) {
-                                            pageNum = totalPages - 4 + i;
-                                        } else {
-                                            pageNum = currentPage - 2 + i;
-                                        }
-                                        
+                                        if (totalPages <= 5) pageNum = i + 1;
+                                        else if (currentPage <= 3) pageNum = i + 1;
+                                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                                        else pageNum = currentPage - 2 + i;
                                         return (
                                             <button
                                                 key={pageNum}
@@ -708,7 +630,6 @@ export default function ApartamentosLocacao() {
                                             </button>
                                         );
                                     })}
-                                    
                                     {totalPages > 5 && currentPage < totalPages - 2 && (
                                         <>
                                             <span className="text-gray-400">...</span>
@@ -737,13 +658,11 @@ export default function ApartamentosLocacao() {
                             </div>
                         )}
                         
-                        {/* Informação sobre paginação */}
                         <div className="text-center mt-6 text-sm text-gray-500">
                             Mostrando {apartamentos.length} de {totalResults} apartamentos
                         </div>
                     </>
                 ) : (
-                    /* Mensagem quando não há propriedades */
                     !loading && (
                         <div className="text-center py-12 bg-white rounded-xl shadow-sm">
                             <Icon icon="mingcute:building-2-line" className="w-24 h-24 text-gray-300 mx-auto mb-6" />
@@ -762,11 +681,7 @@ export default function ApartamentosLocacao() {
                                     Tentar novamente
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        // Limpar filtros específicos
-                                        // Você pode adicionar uma função para limpar apenas alguns filtros
-                                        console.log("Sugestão: Limpar alguns filtros");
-                                    }}
+                                    onClick={() => console.log("Limpar filtros")}
                                     className="px-8 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                                 >
                                     Limpar filtros

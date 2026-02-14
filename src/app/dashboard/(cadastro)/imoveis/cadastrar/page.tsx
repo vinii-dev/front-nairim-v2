@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/dashboard/imoveis/cadastrar/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -36,7 +35,6 @@ const parseMoney = (value: string) => {
   const parsed = parseFloat(cleaned);
   
   if (isNaN(parsed)) {
-    console.warn(`Valor monetário inválido: ${value}`);
     return 0;
   }
   
@@ -54,7 +52,6 @@ export default function CadastrarImovelPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
 
-  // Buscar dados para selects
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -80,7 +77,6 @@ export default function CadastrarImovelPage() {
         setPropertyTypes(typesList);
         setAgencies(agenciesList);
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
         showMessage('Erro ao carregar dados iniciais', 'error');
       } finally {
         setLoadingData(false);
@@ -90,10 +86,7 @@ export default function CadastrarImovelPage() {
     fetchInitialData();
   }, [showMessage]);
 
-  // Handler para mudança de campo - CEP
   const handleFieldChange = async (fieldName: string, value: any) => {
-    console.log('handleFieldChange:', fieldName, value);
-    
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
       
@@ -131,7 +124,6 @@ export default function CadastrarImovelPage() {
             };
           }
         } catch (error: any) {
-          console.error('Erro ao buscar CEP:', error);
           showMessage(error.message || 'Erro ao buscar CEP. Tente novamente.', 'error');
           return null;
         }
@@ -148,7 +140,6 @@ export default function CadastrarImovelPage() {
     return null;
   };
 
-  // Função para validar um step
   const validateStep = (stepIndex: number, data: any): boolean => {
     const stepFields = steps[stepIndex].fields;
     
@@ -223,7 +214,7 @@ export default function CadastrarImovelPage() {
           field: 'floor_number',
           label: 'Número do Andar',
           type: 'number',
-          required: true,
+          required: false,
           placeholder: 'Número do andar',
           showIncrementButtons: true,
           min: 0,
@@ -432,7 +423,7 @@ export default function CadastrarImovelPage() {
           field: 'condo_fee',
           label: 'Valor Condomínio',
           type: 'text',
-          required: true,
+          required: false,
           placeholder: 'R$ 500,00',
           mask: 'money',
           icon: <Building size={20} />,
@@ -458,10 +449,10 @@ export default function CadastrarImovelPage() {
           icon: <Key size={20} />,
         },
         {
-          field: 'reference_date',
-          label: 'Data de Referência',
+          field: 'sale_date',
+          label: 'Data da Venda',
           type: 'date',
-          required: true,
+          required: false,
           icon: <Calendar size={20} />,
           className: 'col-span-full',
         },
@@ -500,22 +491,23 @@ export default function CadastrarImovelPage() {
       fields: [
         {
           field: 'arquivosImagens',
-          label: 'Imagens',
+          label: 'Imagens e Vídeos',
           type: 'file',
-          accept: 'image/*',
+          accept: 'image/*,video/mp4,video/webm',
           multiple: true,
-          textButton: 'Selecionar Imagens',
+          textButton: 'Selecionar Mídias',
           placeholder: 'Nenhum arquivo selecionado',
           icon: <Upload size={20} />,
-          className: 'col-span-full block w-full h-full',
-          maxFiles: 20,
+          className: 'col-span-full w-full',
+          maxFiles: 30,
         },
         {
           field: 'arquivosMatricula',
           label: 'Matrícula',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -526,7 +518,8 @@ export default function CadastrarImovelPage() {
           label: 'Registro',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -537,7 +530,8 @@ export default function CadastrarImovelPage() {
           label: 'Escritura',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -547,14 +541,11 @@ export default function CadastrarImovelPage() {
     },
   ], [owners, propertyTypes, agencies, loadingData]);
 
-  // Handler de submit ATUALIZADO para usar o novo endpoint unificado
   const handleSubmit = async (data: any) => {
     try {
-      // Criar FormData para enviar tudo junto
       const formData = new FormData();
       
-      // Separar dados em 3 objetos JSON como o novo endpoint ESPERA EXATAMENTE
-      const propertyData = {
+      const propertyDataObj = {
         title: data.title,
         bedrooms: parseInt(data.bedrooms) || 0,
         bathrooms: parseInt(data.bathrooms) || 0,
@@ -589,25 +580,16 @@ export default function CadastrarImovelPage() {
         property_tax: parseMoney(data.property_tax),
         status: data.status,
         notes: data.values_notes,
-        reference_date: data.reference_date || new Date().toISOString().split('T')[0],
+        sale_date: data.sale_date || null,
         sale_value: parseMoney(data.sale_value) || 0,
         extra_charges: parseMoney(data.extra_charges) || 0,
       };
 
-      console.log('📊 Dados preparados:', {
-        propertyData,
-        addressData,
-        valuesData,
-        userId: user?.id || ''
-      });
-
-      // Adicionar dados como JSON string (EXATAMENTE como o endpoint espera)
-      formData.append('propertyData', JSON.stringify(propertyData));
+      formData.append('propertyData', JSON.stringify(propertyDataObj));
       formData.append('addressData', JSON.stringify(addressData));
       formData.append('valuesData', JSON.stringify(valuesData));
       formData.append('userId', user?.id || '');
 
-      // Adicionar arquivos (certifique-se de que os nomes estão CORRETOS)
       if (data.arquivosImagens?.length > 0) {
         Array.from(data.arquivosImagens).forEach((file: any) => {
           formData.append('arquivosImagens', file);
@@ -638,33 +620,23 @@ export default function CadastrarImovelPage() {
         });
       }
 
-      console.log('📤 Enviando para o endpoint unificado...');
-      
       const API_URL = process.env.NEXT_PUBLIC_URL_API;
       
-      // ✅ USAR O NOVO ENDPOINT UNIFICADO
       const createRes = await fetch(`${API_URL}/properties/create-unified`, {
         method: 'POST',
         body: formData,
-        // NÃO definir Content-Type - o browser fará isso automaticamente
       });
 
-      console.log('📥 Resposta recebida:', createRes.status, createRes.statusText);
-
       const responseText = await createRes.text();
-      console.log('📄 Conteúdo da resposta:', responseText);
 
       let result;
       try {
         result = JSON.parse(responseText);
       } catch (e) {
-        console.error('❌ Erro ao fazer parse da resposta:', e);
         throw new Error('Resposta inválida do servidor');
       }
 
       if (!createRes.ok) {
-        console.error('❌ Erro da API:', result);
-        
         if (createRes.status === 400 && result.errors) {
           const validationErrors = Object.entries(result.errors)
             .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
@@ -682,7 +654,6 @@ export default function CadastrarImovelPage() {
       return result.data || result;
 
     } catch (error: any) {
-      console.error('❌ Erro no handleSubmit:', error);
       throw new Error(`Erro ao criar imóvel: ${error.message}`);
     }
   };
@@ -694,10 +665,8 @@ export default function CadastrarImovelPage() {
   };
 
   const canNavigateToStep = (targetStep: number, currentStep: number, data: any): boolean => {
-    // Sempre permite voltar
     if (targetStep < currentStep) return true;
     
-    // Para avançar, verifica se o step atual é válido
     if (targetStep > currentStep) {
       return validateStep(currentStep, data);
     }

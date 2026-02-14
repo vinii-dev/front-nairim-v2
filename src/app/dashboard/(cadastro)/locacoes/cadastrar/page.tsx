@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/dashboard/(cadastro)/locacoes/cadastrar/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -19,16 +18,20 @@ const parseMoney = (value: string | number) => {
     return value;
   }
   
-  const cleaned = String(value)
-    .replace('R$', '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .trim();
+  const strValue = String(value).trim();
+  
+  if (!strValue.includes(',') && strValue.includes('.')) {
+    const parsed = parseFloat(strValue);
+    if (!isNaN(parsed)) return parsed;
+  }
+  
+  const cleaned = strValue
+    .replace(/[^\d,-]/g, '') 
+    .replace(',', '.');
     
   const parsed = parseFloat(cleaned);
   
   if (isNaN(parsed)) {
-    console.warn(`Valor monetário inválido: ${value}`);
     return 0;
   }
   
@@ -46,14 +49,6 @@ const formatMoney = (value: number) => {
   }).format(value);
 };
 
-// Função para calcular o IPTU (exemplo: 0.3% do valor do aluguel + condomínio)
-const calculateIPTU = (rentAmount: number, condoFee: number = 0): number => {
-  const baseValue = rentAmount + condoFee;
-  // Exemplo: 0.3% do valor base (pode ajustar a fórmula conforme necessidade)
-  const iptuValue = baseValue * 0.003; // 0.3%
-  return iptuValue;
-};
-
 export default function CadastrarLocacaoPage() {
   const { showMessage } = useMessageContext();
   const router = useRouter();
@@ -64,7 +59,6 @@ export default function CadastrarLocacaoPage() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [formValues, setFormValues] = useState<any>({});
 
-  // Buscar dados para selects
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -83,7 +77,6 @@ export default function CadastrarLocacaoPage() {
         setProperties(propertiesData.data || propertiesData || []);
         setTenants(tenantsData.data || tenantsData || []);
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
         showMessage('Erro ao carregar dados iniciais', 'error');
       } finally {
         setLoadingData(false);
@@ -93,11 +86,7 @@ export default function CadastrarLocacaoPage() {
     fetchInitialData();
   }, [showMessage]);
 
-  // Handler para mudança de campo - busca dados do imóvel
   const handleFieldChange = async (fieldName: string, value: any) => {
-    console.log('handleFieldChange:', fieldName, value);
-    
-    // Quando o imóvel é selecionado, buscar seus dados completos
     if (fieldName === 'property_id' && value) {
       try {
         showMessage('Carregando dados do imóvel...', 'info');
@@ -111,31 +100,25 @@ export default function CadastrarLocacaoPage() {
         const result = await response.json();
         const property = result.data || result;
         
-        // Obter valores do imóvel (último registro do array values)
         const propertyValues = property.values?.[0] || {};
         
-        // Preparar updates para o formulário
         const updates: any = {
-          // Preencher tipo do imóvel e proprietário (campos ocultos)
           type_id: property.type_id,
           owner_id: property.owner_id,
-          // Preencher campos de exibição (texto somente leitura)
           type_display: property.type?.description || 'Tipo não encontrado',
           owner_display: property.owner?.name || 'Proprietário não encontrado',
-          // Valores monetários do imóvel
           rent_amount: propertyValues.rental_value ? formatMoney(parseMoney(propertyValues.rental_value)) : 'R$ 0,00',
           condo_fee: propertyValues.condo_fee ? formatMoney(parseMoney(propertyValues.condo_fee)) : 'R$ 0,00',
+          property_tax: propertyValues.property_tax ? formatMoney(parseMoney(propertyValues.property_tax)) : 'R$ 0,00',
           extra_charges: propertyValues.extra_charges ? formatMoney(parseMoney(propertyValues.extra_charges)) : 'R$ 0,00',
         };
 
-        // Calcular comissão padrão (5% do aluguel)
         if (propertyValues.rental_value) {
-          updates.agency_commission = '5'; // 5% por padrão
+          updates.agency_commission = '5';
           const rentValue = parseMoney(propertyValues.rental_value);
           updates.commission_amount = formatMoney(rentValue * 0.05);
         }
 
-        // Definir dia de vencimento padrão
         updates.rent_due_day = '5';
         updates.tax_due_day = '10';
         updates.condo_due_day = '10';
@@ -144,13 +127,11 @@ export default function CadastrarLocacaoPage() {
         return updates;
 
       } catch (error: any) {
-        console.error('Erro ao buscar imóvel:', error);
         showMessage(error.message || 'Erro ao buscar dados do imóvel', 'error');
         return null;
       }
     }
 
-    // Calcular comissão automaticamente quando o percentual OU valor do aluguel muda
     if (fieldName === 'agency_commission' || fieldName === 'rent_amount') {
       const rentAmount = fieldName === 'rent_amount' 
         ? parseMoney(value) 
@@ -167,27 +148,9 @@ export default function CadastrarLocacaoPage() {
       };
     }
 
-    // Se mudou o aluguel ou condomínio, recalcular IPTU
-    if (fieldName === 'rent_amount' || fieldName === 'condo_fee') {
-      const rentAmount = fieldName === 'rent_amount' 
-        ? parseMoney(value) 
-        : parseMoney(formValues?.rent_amount || 0);
-      
-      const condoFee = fieldName === 'condo_fee'
-        ? parseMoney(value)
-        : parseMoney(formValues?.condo_fee || 0);
-      
-      const iptuValue = calculateIPTU(rentAmount, condoFee);
-      
-      return {
-        property_tax: formatMoney(iptuValue)
-      };
-    }
-
     return null;
   };
 
-  // Função para validar um step
   const validateStep = (stepIndex: number, data: any): boolean => {
     const stepFields = steps[stepIndex].fields;
     
@@ -246,7 +209,6 @@ export default function CadastrarLocacaoPage() {
           icon: <Home size={20} />,
           className: 'col-span-full',
         },
-        // Campos ocultos para os IDs (necessários para o submit)
         {
           field: 'type_id',
           label: '',
@@ -259,7 +221,6 @@ export default function CadastrarLocacaoPage() {
           type: 'text',
           hidden: true,
         },
-        // Campos de exibição (somente leitura)
         {
           field: 'type_display',
           label: 'Tipo do Imóvel',
@@ -328,14 +289,11 @@ export default function CadastrarLocacaoPage() {
         },
         {
           field: 'property_tax',
-          label: 'Valor do IPTU (Calculado Automaticamente)',
+          label: 'Valor do IPTU',
           type: 'text',
           placeholder: 'R$ 0,00',
           mask: 'money',
           icon: <File size={20} />,
-          readOnly: true,
-          disabled: true,
-          className: 'bg-gray-50',
         },
         {
           field: 'extra_charges',
@@ -396,19 +354,12 @@ export default function CadastrarLocacaoPage() {
     },
   ], [properties, tenants, loadingData]);
 
-  // Handler de submit
   const handleSubmit = async (data: any) => {
     try {
       if (!data.property_id) {
         throw new Error('Selecione um imóvel para continuar');
       }
 
-      // Calcular IPTU final antes de enviar
-      const rentAmount = parseMoney(data.rent_amount || 0);
-      const condoFee = parseMoney(data.condo_fee || 0);
-      const finalIPTU = calculateIPTU(rentAmount, condoFee);
-
-      // Preparar payload no formato esperado pelo back-end
       const payload = {
         property_id: data.property_id,
         type_id: data.type_id,
@@ -417,9 +368,9 @@ export default function CadastrarLocacaoPage() {
         contract_number: data.contract_number,
         start_date: data.start_date,
         end_date: data.end_date,
-        rent_amount: rentAmount,
+        rent_amount: parseMoney(data.rent_amount || 0),
         condo_fee: data.condo_fee ? parseMoney(data.condo_fee) : null,
-        property_tax: finalIPTU, // Usar o IPTU calculado
+        property_tax: data.property_tax ? parseMoney(data.property_tax) : null,
         extra_charges: data.extra_charges ? parseMoney(data.extra_charges) : null,
         agency_commission: data.agency_commission ? parseFloat(data.agency_commission) : null,
         commission_amount: data.commission_amount ? parseMoney(data.commission_amount) : null,
@@ -427,8 +378,6 @@ export default function CadastrarLocacaoPage() {
         tax_due_day: data.tax_due_day ? parseInt(data.tax_due_day) : null,
         condo_due_day: data.condo_due_day ? parseInt(data.condo_due_day) : null,
       };
-
-      console.log('📊 Dados da locação preparados:', payload);
 
       const API_URL = process.env.NEXT_PUBLIC_URL_API;
       
@@ -445,13 +394,10 @@ export default function CadastrarLocacaoPage() {
       try {
         result = JSON.parse(responseText);
       } catch (e) {
-        console.error('❌ Erro ao fazer parse da resposta:', e);
         throw new Error('Resposta inválida do servidor');
       }
 
       if (!createRes.ok) {
-        console.error('❌ Erro da API:', result);
-        
         if (createRes.status === 400 && result.errors) {
           const validationErrors = Object.entries(result.errors)
             .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
@@ -469,7 +415,6 @@ export default function CadastrarLocacaoPage() {
       return result.data || result;
 
     } catch (error: any) {
-      console.error('❌ Erro no handleSubmit:', error);
       throw new Error(`Erro ao criar locação: ${error.message}`);
     }
   };
@@ -481,10 +426,8 @@ export default function CadastrarLocacaoPage() {
   };
 
   const canNavigateToStep = (targetStep: number, currentStep: number, data: any): boolean => {
-    // Sempre permite voltar
     if (targetStep < currentStep) return true;
     
-    // Para avançar, verifica se o step atual é válido
     if (targetStep > currentStep) {
       return validateStep(currentStep, data);
     }

@@ -18,16 +18,20 @@ const parseMoney = (value: string | number) => {
     return value;
   }
   
-  const cleaned = String(value)
-    .replace('R$', '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .trim();
+  const strValue = String(value).trim();
+  
+  if (!strValue.includes(',') && strValue.includes('.')) {
+    const parsed = parseFloat(strValue);
+    if (!isNaN(parsed)) return parsed;
+  }
+  
+  const cleaned = strValue
+    .replace(/[^\d,-]/g, '') 
+    .replace(',', '.');
     
   const parsed = parseFloat(cleaned);
   
   if (isNaN(parsed)) {
-    console.warn(`Valor monetário inválido: ${value}`);
     return 0;
   }
   
@@ -45,12 +49,6 @@ const formatMoney = (value: number) => {
   }).format(value);
 };
 
-const calculateIPTU = (rentAmount: number, condoFee: number = 0): number => {
-  const baseValue = rentAmount + condoFee;
-  const iptuValue = baseValue * 0.003;
-  return iptuValue;
-};
-
 export default function EditarLocacaoPage() {
   const params = useParams();
   const id = params.id as string;
@@ -63,7 +61,6 @@ export default function EditarLocacaoPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [formValues, setFormValues] = useState<any>({});
 
-  // Carregar dados iniciais
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -82,7 +79,6 @@ export default function EditarLocacaoPage() {
         setProperties(propertiesData.data || propertiesData || []);
         setTenants(tenantsData.data || tenantsData || []);
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
         showMessage('Erro ao carregar dados', 'error');
       } finally {
         setLoadingData(false);
@@ -92,10 +88,7 @@ export default function EditarLocacaoPage() {
     fetchData();
   }, [showMessage]);
 
-  // Handler para mudança de campo
   const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
-    console.log('handleFieldChange:', fieldName, value);
-    
     if (fieldName === 'property_id' && value) {
       try {
         showMessage('Carregando dados do imóvel...', 'info');
@@ -116,9 +109,10 @@ export default function EditarLocacaoPage() {
           owner_id: property.owner_id,
           type_display: property.type?.description || 'Tipo não encontrado',
           owner_display: property.owner?.name || 'Proprietário não encontrado',
-          rent_amount: propertyValues.rental_value ? formatMoney(parseMoney(propertyValues.rental_value)) : 'R$ 0,00',
-          condo_fee: propertyValues.condo_fee ? formatMoney(parseMoney(propertyValues.condo_fee)) : 'R$ 0,00',
-          extra_charges: propertyValues.extra_charges ? formatMoney(parseMoney(propertyValues.extra_charges)) : 'R$ 0,00',
+          rent_amount: propertyValues.rental_value ? formatMoney(parseMoney(propertyValues.rental_value)) : '',
+          condo_fee: propertyValues.condo_fee ? formatMoney(parseMoney(propertyValues.condo_fee)) : '',
+          property_tax: propertyValues.property_tax ? formatMoney(parseMoney(propertyValues.property_tax)) : '',
+          extra_charges: propertyValues.extra_charges ? formatMoney(parseMoney(propertyValues.extra_charges)) : '',
         };
 
         if (propertyValues.rental_value) {
@@ -131,13 +125,11 @@ export default function EditarLocacaoPage() {
         return updates;
 
       } catch (error: any) {
-        console.error('Erro ao buscar imóvel:', error);
         showMessage(error.message || 'Erro ao buscar dados do imóvel', 'error');
         return null;
       }
     }
 
-    // Calcular comissão automaticamente quando o percentual OU valor do aluguel muda
     if (fieldName === 'agency_commission' || fieldName === 'rent_amount') {
       const rentAmount = fieldName === 'rent_amount' 
         ? parseMoney(value) 
@@ -154,41 +146,15 @@ export default function EditarLocacaoPage() {
       };
     }
 
-    // Se mudou o aluguel ou condomínio, recalcular IPTU
-    if (fieldName === 'rent_amount' || fieldName === 'condo_fee') {
-      const rentAmount = fieldName === 'rent_amount' 
-        ? parseMoney(value) 
-        : parseMoney(formValues?.rent_amount || 0);
-      
-      const condoFee = fieldName === 'condo_fee'
-        ? parseMoney(value)
-        : parseMoney(formValues?.condo_fee || 0);
-      
-      const iptuValue = calculateIPTU(rentAmount, condoFee);
-      
-      return {
-        property_tax: formatMoney(iptuValue)
-      };
-    }
-
     return null;
   }, [formValues, showMessage]);
 
-  // Handler para submit (edit)
   const handleSubmit = async (data: any) => {
     try {
-      console.log('✏️ Atualizando locação...', data);
-      
       if (!data.property_id) {
         throw new Error('Selecione um imóvel para continuar');
       }
 
-      // Calcular IPTU final
-      const rentAmount = parseMoney(data.rent_amount || 0);
-      const condoFee = parseMoney(data.condo_fee || 0);
-      const finalIPTU = calculateIPTU(rentAmount, condoFee);
-
-      // Formatar os dados para o endpoint
       const formattedData = {
         property_id: data.property_id,
         type_id: data.type_id,
@@ -197,9 +163,9 @@ export default function EditarLocacaoPage() {
         contract_number: data.contract_number,
         start_date: data.start_date,
         end_date: data.end_date,
-        rent_amount: rentAmount,
+        rent_amount: parseMoney(data.rent_amount || 0),
         condo_fee: data.condo_fee ? parseMoney(data.condo_fee) : null,
-        property_tax: finalIPTU,
+        property_tax: data.property_tax ? parseMoney(data.property_tax) : null,
         extra_charges: data.extra_charges ? parseMoney(data.extra_charges) : null,
         agency_commission: data.agency_commission ? parseFloat(data.agency_commission) : null,
         commission_amount: data.commission_amount ? parseMoney(data.commission_amount) : null,
@@ -207,8 +173,6 @@ export default function EditarLocacaoPage() {
         tax_due_day: data.tax_due_day ? parseInt(data.tax_due_day) : null,
         condo_due_day: data.condo_due_day ? parseInt(data.condo_due_day) : null,
       };
-
-      console.log('📊 Dados formatados para edição:', formattedData);
 
       const API_URL = process.env.NEXT_PUBLIC_URL_API;
       const response = await fetch(`${API_URL}/leases/${id}`, {
@@ -220,7 +184,6 @@ export default function EditarLocacaoPage() {
       });
 
       const responseText = await response.text();
-      console.log('📥 Resposta da edição:', response.status, responseText);
 
       let result;
       try {
@@ -242,18 +205,13 @@ export default function EditarLocacaoPage() {
       return result;
 
     } catch (error: any) {
-      console.error('❌ Erro na edição:', error);
       throw new Error(`Erro ao atualizar locação: ${error.message}`);
     }
   };
 
-  // Transformar dados da API para o formulário
   const transformData = useCallback((apiData: any) => {
-    console.log('🔄 Transformando dados da API (locação):', apiData);
-    
     if (!apiData) return {};
     
-    // Formatar datas para o input type="date" (YYYY-MM-DD)
     const formatDate = (dateString: string) => {
       if (!dateString) return '';
       const date = new Date(dateString);
@@ -273,7 +231,7 @@ export default function EditarLocacaoPage() {
       notes: apiData.notes || '',
       rent_amount: apiData.rent_amount ? formatMoney(apiData.rent_amount) : 'R$ 0,00',
       condo_fee: apiData.condo_fee ? formatMoney(apiData.condo_fee) : null,
-      property_tax: apiData.property_tax ? formatMoney(apiData.property_tax) : 'R$ 0,00',
+      property_tax: apiData.property_tax ? formatMoney(apiData.property_tax) : null,
       extra_charges: apiData.extra_charges ? formatMoney(apiData.extra_charges) : null,
       agency_commission: apiData.agency_commission ? String(apiData.agency_commission) : '5',
       commission_amount: apiData.commission_amount ? formatMoney(apiData.commission_amount) : 'R$ 0,00',
@@ -393,35 +351,32 @@ export default function EditarLocacaoPage() {
           type: 'text',
           required: true,
           placeholder: 'R$ 0,00',
-          mask: 'money',
           icon: <DollarSign size={20} />,
+          mask: 'money',
         },
         {
           field: 'condo_fee',
           label: 'Valor do Condomínio',
           type: 'text',
           placeholder: 'R$ 0,00',
-          mask: 'money',
           icon: <Building size={20} />,
+          mask: 'money',
         },
         {
           field: 'property_tax',
-          label: 'Valor do IPTU (Calculado Automaticamente)',
+          label: 'Valor do IPTU',
           type: 'text',
           placeholder: 'R$ 0,00',
-          mask: 'money',
           icon: <File size={20} />,
-          readOnly: true,
-          disabled: true,
-          className: 'bg-gray-50',
+          mask: 'money',
         },
         {
           field: 'extra_charges',
           label: 'Taxas Extras',
           type: 'text',
           placeholder: 'R$ 0,00',
-          mask: 'money',
           icon: <Calculator size={20} />,
+          mask: 'money',
         },
         {
           field: 'agency_commission',
@@ -436,38 +391,32 @@ export default function EditarLocacaoPage() {
           label: 'Valor Comissão',
           type: 'text',
           placeholder: 'R$ 0,00',
-          mask: 'money',
           icon: <DollarSign size={20} />,
           readOnly: true,
           disabled: true,
           className: 'bg-gray-50',
+          mask: 'money',
         },
         {
           field: 'rent_due_day',
           label: 'Vencimento Aluguel',
-          type: 'number',
+          type: 'text',
           required: true,
-          placeholder: '5',
-          min: 1,
-          max: 31,
+          placeholder: 'Dia 5',
           icon: <Calendar size={20} />,
         },
         {
           field: 'tax_due_day',
           label: 'Vencimento IPTU',
-          type: 'number',
-          placeholder: '10',
-          min: 1,
-          max: 31,
+          type: 'text',
+          placeholder: 'Dia 10',
           icon: <Calendar size={20} />,
         },
         {
           field: 'condo_due_day',
           label: 'Vencimento Condomínio',
-          type: 'number',
-          placeholder: '10',
-          min: 1,
-          max: 31,
+          type: 'text',
+          placeholder: 'Dia 10',
           icon: <Calendar size={20} />,
         },
       ],

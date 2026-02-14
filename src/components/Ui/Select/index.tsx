@@ -41,12 +41,11 @@ export default function Select({
   const [selectedValue, setSelectedValue] = useState<string | number>(value || defaultValue || '');
   const [selectedLabel, setSelectedLabel] = useState<string>(placeholder);
 
-  // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const optionsListRef = useRef<HTMLUListElement>(null);
   const optionRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const isMouseDownRef = useRef(false);
 
-  // Atualiza label quando value muda
   useEffect(() => {
     const targetValue = value !== undefined ? value : defaultValue;
     if (targetValue !== undefined && targetValue !== '') {
@@ -58,7 +57,6 @@ export default function Select({
     }
   }, [value, defaultValue, options, placeholder]);
 
-  // Fecha ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => { 
       if (
@@ -81,7 +79,6 @@ export default function Select({
     
     if (onChange) onChange(option.value);
     
-    // Devolve o foco para o container principal (para continuar a navegação do form)
     if (containerRef.current) containerRef.current.focus();
   };
 
@@ -89,23 +86,26 @@ export default function Select({
     if (!disabled) setIsOpen(!isOpen);
   };
 
-  // --- LÓGICA DE FOCO E TECLADO ---
-
-  // 1. Ao receber foco (via Tab vindo do campo anterior), ABRE o select
   const handleFocus = () => {
-    if (!disabled && !isOpen) {
+    if (!disabled && !isOpen && !isMouseDownRef.current) {
       setIsOpen(true);
     }
+    isMouseDownRef.current = false;
   };
 
-  // 2. Controla o container principal
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled) {
+      e.preventDefault();
+      return;
+    }
+    isMouseDownRef.current = true;
+  };
+
   const handleContainerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled) return;
 
-    // Se apertar TAB e estiver ABERTO -> Vai para a primeira opção
     if (e.key === 'Tab' && isOpen) {
-      e.preventDefault(); // Impede de ir para o próximo input do form
-      // Foca na primeira opção se existir
+      e.preventDefault(); 
       if (options.length > 0) {
         optionRefs.current[0]?.focus();
       }
@@ -117,28 +117,22 @@ export default function Select({
     else if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (!isOpen) setIsOpen(true);
-      // Pequeno delay para garantir renderização da lista
       setTimeout(() => optionRefs.current[0]?.focus(), 0);
     }
   };
 
-  // 3. Controla a navegação DENTRO das opções
   const handleOptionKeyDown = (e: React.KeyboardEvent<HTMLLIElement>, index: number, option: Option) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       handleOptionSelect(option);
     } 
     else if (e.key === 'Tab') {
-      // Se NÃO for o último item, vai para o próximo item da lista
       if (index < options.length - 1) {
         e.preventDefault();
         optionRefs.current[index + 1]?.focus();
       } 
-      // Se FOR o último item, deixa o comportamento padrão acontecer 
-      // (que é fechar o foco atual e ir para o próximo elemento focalizável do DOM/Formulário)
       else {
         setIsOpen(false);
-        // O foco sairá naturalmente do componente aqui
       }
     }
     else if (e.key === 'ArrowDown') {
@@ -154,7 +148,6 @@ export default function Select({
       if (prevIndex >= 0) {
         optionRefs.current[prevIndex]?.focus();
       } else {
-        // Se estiver no primeiro e subir, volta para o container
         containerRef.current?.focus();
       }
     }
@@ -168,24 +161,22 @@ export default function Select({
     <div className="relative font-poppins w-full min-w-[300px] flex-1">
       <Label id={id} label={label} required={required} svg={svg} />
       
-      {/* Container "Input" do Select */}
       <div
         ref={containerRef}
         className={`
-          ${disabled ? 'bg-[#EDEDED] cursor-not-allowed' : 'bg-white border-[#CCCCCC] cursor-pointer'} 
+          ${disabled ? 'bg-[#EDEDED] cursor-not-allowed outline-none' : 'bg-white border-[#CCCCCC] cursor-pointer outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent'} 
           border rounded-lg py-2 px-4 flex justify-between items-center relative text-[14px] text-[#111111B2] h-[40px] w-full
-          outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
         `}
         onClick={toggleOpen}
-        tabIndex={disabled ? -1 : tabIndex}
+        onMouseDown={handleMouseDown}
+        tabIndex={disabled ? undefined : tabIndex}
         onKeyDown={handleContainerKeyDown}
-        onFocus={handleFocus} // Abre automaticamente ao receber foco
+        onFocus={handleFocus} 
       >
         <span className="truncate">{selectedLabel}</span>
         <ChevronDown size={20} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
-      {/* Lista de Opções */}
       {isOpen && !disabled && (
         <ul 
           ref={optionsListRef}
@@ -204,7 +195,7 @@ export default function Select({
                 e.stopPropagation();
                 handleOptionSelect(option);
               }}
-              tabIndex={0} // Necessário para receber foco via .focus()
+              tabIndex={0} 
               onKeyDown={(e) => handleOptionKeyDown(e, index, option)}
             >
               {option.label}

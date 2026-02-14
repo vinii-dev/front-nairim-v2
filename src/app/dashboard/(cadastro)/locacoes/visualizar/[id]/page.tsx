@@ -26,10 +26,7 @@ export default function VisualizarLocacaoPage() {
   const id = params.id as string;
   const router = useRouter();
 
-  // Transformar dados da API para o formulário
   const transformData = (apiData: any) => {
-    console.log('🔄 Transformando dados da API (locação):', apiData);
-    
     if (!apiData) return {};
     
     return {
@@ -43,7 +40,7 @@ export default function VisualizarLocacaoPage() {
       notes: apiData.notes || '',
       rent_amount: apiData.rent_amount ? formatMoney(apiData.rent_amount) : 'R$ 0,00',
       condo_fee: apiData.condo_fee ? formatMoney(apiData.condo_fee) : null,
-      property_tax: apiData.property_tax ? formatMoney(apiData.property_tax) : 'R$ 0,00',
+      property_tax: apiData.property_tax ? formatMoney(apiData.property_tax) : null,
       extra_charges: apiData.extra_charges ? formatMoney(apiData.extra_charges) : null,
       agency_commission: apiData.agency_commission ? `${apiData.agency_commission}%` : '0%',
       commission_amount: apiData.commission_amount ? formatMoney(apiData.commission_amount) : 'R$ 0,00',

@@ -17,7 +17,6 @@ import {
   Globe
 } from 'lucide-react';
 
-
 const parseMetric = (value: string) => {
   if (!value) return 0;
   const cleaned = value.replace(' m²', '').replace(' m', '').replace(/\./g, '').replace(',', '.');
@@ -36,7 +35,6 @@ const parseMoney = (value: string) => {
   const parsed = parseFloat(cleaned);
   
   if (isNaN(parsed)) {
-    console.warn(`Valor monetário inválido: ${value}`);
     return 0;
   }
   
@@ -99,7 +97,6 @@ export default function EditarImovelPage() {
   const [loadingProperty, setLoadingProperty] = useState(true);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
 
-  // Buscar dados para selects
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -125,7 +122,6 @@ export default function EditarImovelPage() {
         setPropertyTypes(typesList);
         setAgencies(agenciesList);
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
         showMessage('Erro ao carregar dados iniciais', 'error');
       } finally {
         setLoadingData(false);
@@ -135,17 +131,14 @@ export default function EditarImovelPage() {
     fetchInitialData();
   }, [showMessage]);
 
-  // Buscar dados do imóvel
   useEffect(() => {
     const fetchPropertyData = async () => {
       if (!id) {
-        console.error('ID do imóvel não encontrado');
         return;
       }
 
       try {
         setLoadingProperty(true);
-        console.log('🔍 Buscando dados do imóvel ID:', id);
         
         const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/properties/${id}`);
         
@@ -154,17 +147,14 @@ export default function EditarImovelPage() {
         }
 
         const data = await response.json();
-        console.log('📊 Dados recebidos do imóvel:', data);
         
         if (data.success && data.data) {
           setPropertyData(data.data);
           setCompletedSteps([0, 1, 2, 3]);
-          console.log('✅ Dados do imóvel carregados com sucesso');
         } else {
           throw new Error(data.message || 'Erro ao carregar dados do imóvel');
         }
       } catch (error: any) {
-        console.error('❌ Erro ao buscar dados do imóvel:', error.message);
         showMessage(`Erro ao carregar dados do imóvel: ${error.message}`, 'error');
         router.push('/dashboard/imoveis');
       } finally {
@@ -175,10 +165,7 @@ export default function EditarImovelPage() {
     fetchPropertyData();
   }, [id, router, showMessage]);
 
-  // Handler para mudança de campo - CEP
   const handleFieldChange = async (fieldName: string, value: any) => {
-    console.log('handleFieldChange:', fieldName, value);
-    
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
       
@@ -216,7 +203,6 @@ export default function EditarImovelPage() {
             };
           }
         } catch (error: any) {
-          console.error('Erro ao buscar CEP:', error);
           showMessage(error.message || 'Erro ao buscar CEP. Tente novamente.', 'error');
           return null;
         }
@@ -233,47 +219,25 @@ export default function EditarImovelPage() {
     return null;
   };
 
-  // Função para transformar os dados da API para o formato do formulário
   const transformData = (apiResponse: any) => {
-    console.log('🔄 transformData chamado com:', apiResponse);
-    
-    // A API retorna { success: true, data: {...}, message: ... }
     const data = apiResponse.data || apiResponse;
     
     if (!data) {
-      console.error('❌ Dados não encontrados na resposta da API');
       return {};
     }
-    
-    console.log('📊 Dados extraídos para transformação:', data);
     
     const address = data.addresses?.[0]?.address || {};
     const values = data.values?.[0] || {};
 
-    const getDocumentTypeName = (type: string) => {
-      const typeMap: Record<string, string> = {
-        'IMAGE': 'Imagem',
-        'REGISTRATION': 'Matrícula',
-        'PROPERTY_RECORD': 'Registro',
-        'TITLE_DEED': 'Escritura',
-        'OTHER': 'Outro Documento'
-      };
-      return typeMap[type] || type;
-    };
-    
-    // Extrair nome do arquivo do caminho
     const extractFileName = (filePath: string) => {
       if (!filePath) return 'Arquivo';
       const parts = filePath.split('/');
       const fileNameWithTimestamp = parts[parts.length - 1];
-      // Remove o timestamp (ex: 1769815258758-)
       const fileName = fileNameWithTimestamp.replace(/^\d+-/, '');
       return decodeURIComponent(fileName);
     };
 
-    // Transformar os dados para o formato esperado pelo formulário
     const transformed = {
-      // Dados básicos do imóvel
       title: data.title || '',
       bedrooms: data.bedrooms?.toString() || '',
       bathrooms: data.bathrooms?.toString() || '',
@@ -290,7 +254,6 @@ export default function EditarImovelPage() {
       furnished: data.furnished?.toString() || 'false',
       notes: data.notes || '',
       
-      // Endereço
       zip_code: address.zip_code || '',
       street: address.street || '',
       number: address.number || '',
@@ -299,18 +262,16 @@ export default function EditarImovelPage() {
       state: address.state || '',
       country: address.country || 'Brasil',
       
-      // Valores
       purchase_value: formatMoney(values.purchase_value || ''),
       rental_value: formatMoney(values.rental_value || ''),
       condo_fee: formatMoney(values.condo_fee || ''),
       property_tax: formatMoney(values.property_tax || ''),
       status: values.status || 'AVAILABLE',
-      reference_date: values.reference_date ? values.reference_date.split('T')[0] : '',
+      sale_date: values.sale_date ? values.sale_date.split('T')[0] : '',
       values_notes: values.notes || '',
       sale_value: formatMoney(values.sale_value || ''),
       extra_charges: formatMoney(values.extra_charges || ''),
       
-      // Arquivos - FORMATO CORRETO baseado no retorno da API (IGUAL AO VISUALIZAR)
       arquivosImagens: data.documents
         ?.filter((doc: any) => doc.type === 'IMAGE')
         .map((doc: any) => ({
@@ -364,13 +325,6 @@ export default function EditarImovelPage() {
         })) || [],
     };
 
-    console.log('✅ Dados transformados para edição:', {
-      ...transformed,
-      arquivosImagens: transformed.arquivosImagens.map((img: any) => ({
-        ...img,
-        file_url: img.file_url?.substring(0, 50) + '...'
-      }))
-    });
     return transformed;
   };
 
@@ -433,7 +387,7 @@ export default function EditarImovelPage() {
           field: 'floor_number',
           label: 'Número do Andar',
           type: 'number',
-          required: true,
+          required: false,
           placeholder: 'Número do andar',
           showIncrementButtons: true,
           min: 0,
@@ -642,7 +596,7 @@ export default function EditarImovelPage() {
           field: 'condo_fee',
           label: 'Valor Condomínio',
           type: 'text',
-          required: true,
+          required: false,
           placeholder: 'R$ 500,00',
           mask: 'money',
           icon: <Building size={20} />,
@@ -668,10 +622,10 @@ export default function EditarImovelPage() {
           icon: <Key size={20} />,
         },
         {
-          field: 'reference_date',
-          label: 'Data de Referência',
+          field: 'sale_date',
+          label: 'Data da Venda',
           type: 'date',
-          required: true,
+          required: false,
           icon: <Calendar size={20} />,
           className: 'col-span-full',
         },
@@ -710,22 +664,23 @@ export default function EditarImovelPage() {
       fields: [
         {
           field: 'arquivosImagens',
-          label: 'Imagens',
+          label: 'Imagens e Vídeos',
           type: 'file',
-          accept: 'image/*',
+          accept: 'image/*,video/mp4,video/webm',
           multiple: true,
-          textButton: 'Selecionar Imagens',
+          textButton: 'Selecionar Mídias',
           placeholder: 'Nenhum arquivo selecionado',
           icon: <Upload size={20} />,
-          className: 'col-span-full block w-full h-full',
-          maxFiles: 20,
+          className: 'col-span-full w-full',
+          maxFiles: 30,
         },
         {
           field: 'arquivosMatricula',
           label: 'Matrícula',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -736,7 +691,8 @@ export default function EditarImovelPage() {
           label: 'Registro',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -747,7 +703,8 @@ export default function EditarImovelPage() {
           label: 'Escritura',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -757,13 +714,10 @@ export default function EditarImovelPage() {
     },
   ], [owners, propertyTypes, agencies, loadingData]);
 
-
   const handleSubmit = async (data: any) => {
     try {
-      // Criar FormData para enviar tudo junto
       const formData = new FormData();
       
-      // Separar dados em 3 objetos JSON
       const propertyDataObj = {
         title: data.title,
         bedrooms: parseInt(data.bedrooms) || 0,
@@ -799,27 +753,17 @@ export default function EditarImovelPage() {
         property_tax: parseMoney(data.property_tax),
         status: data.status,
         notes: data.values_notes,
-        reference_date: data.reference_date || new Date().toISOString().split('T')[0],
+        sale_date: data.sale_date || null,
         sale_value: parseMoney(data.sale_value) || 0,
         extra_charges: parseMoney(data.extra_charges) || 0,
       };
 
-      console.log('📊 Dados preparados para edição:', {
-        propertyData: propertyDataObj,
-        addressData,
-        valuesData,
-        userId: user?.id || ''
-      });
-
-      // Adicionar dados como JSON string
       formData.append('propertyData', JSON.stringify(propertyDataObj));
       formData.append('addressData', JSON.stringify(addressData));
       formData.append('valuesData', JSON.stringify(valuesData));
       formData.append('userId', user?.id || '');
 
-      // Função para processar campos de arquivo e detectar remoções
       const processFileField = (fieldName: string, fieldData: any[] = []): File[] => {
-        // Filtrar apenas novos arquivos (Files)
         const newFiles = fieldData.filter(item => 
           item && 
           typeof item === 'object' && 
@@ -831,10 +775,8 @@ export default function EditarImovelPage() {
         return newFiles;
       };
 
-      // Rastrear documentos que foram removidos
       const removedDocumentIds: string[] = [];
 
-      // Para cada tipo de documento, verificar quais foram removidos
       const documentTypes = [
         { field: 'arquivosImagens', type: 'IMAGE' },
         { field: 'arquivosMatricula', type: 'REGISTRATION' },
@@ -845,10 +787,8 @@ export default function EditarImovelPage() {
       documentTypes.forEach(({ field, type }) => {
         const currentDocuments = data[field] || [];
         
-        // Obter documentos originais deste tipo
         const originalDocuments = (propertyData?.documents || []).filter((doc: any) => doc.type === type) || [];
         
-        // Obter IDs dos documentos atuais (que não foram removidos)
         const currentDocumentIds = currentDocuments
           .filter((item: any) => 
             item && 
@@ -859,7 +799,6 @@ export default function EditarImovelPage() {
           )
           .map((doc: any) => doc.id);
         
-        // Identificar documentos originais que não estão mais presentes
         const removedIds = originalDocuments
           .filter((doc: any) => !currentDocumentIds.includes(doc.id))
           .map((doc: any) => doc.id);
@@ -867,24 +806,14 @@ export default function EditarImovelPage() {
         removedDocumentIds.push(...removedIds);
       });
 
-      // Adicionar lista de documentos removidos ao FormData
       if (removedDocumentIds.length > 0) {
         formData.append('removedDocuments', JSON.stringify(removedDocumentIds));
-        console.log('🗑️ Documentos removidos:', removedDocumentIds);
       }
 
-      // Adicionar apenas arquivos novos
       const newImages = processFileField('arquivosImagens', data.arquivosImagens);
       const newMatricula = processFileField('arquivosMatricula', data.arquivosMatricula);
       const newRegistro = processFileField('arquivosRegistro', data.arquivosRegistro);
       const newEscritura = processFileField('arquivosEscritura', data.arquivosEscritura);
-
-      console.log('📤 Arquivos novos a enviar:', {
-        imagens: newImages.length,
-        matricula: newMatricula.length,
-        registro: newRegistro.length,
-        escritura: newEscritura.length
-      });
 
       newImages.forEach((file: File) => {
         formData.append('arquivosImagens', file);
@@ -902,32 +831,23 @@ export default function EditarImovelPage() {
         formData.append('arquivosEscritura', file);
       });
 
-      console.log('📤 Enviando para o endpoint de atualização...');
-      
       const API_URL = process.env.NEXT_PUBLIC_URL_API;
       
-      // Usar o novo endpoint de update unificado
       const updateRes = await fetch(`${API_URL}/properties/update-unified/${id}`, {
         method: 'PUT',
         body: formData,
       });
 
-      console.log('📥 Resposta recebida:', updateRes.status, updateRes.statusText);
-
       const responseText = await updateRes.text();
-      console.log('📄 Conteúdo da resposta:', responseText);
 
       let result;
       try {
         result = JSON.parse(responseText);
       } catch (e) {
-        console.error('❌ Erro ao fazer parse da resposta:', e);
         throw new Error('Resposta inválida do servidor');
       }
 
       if (!updateRes.ok) {
-        console.error('❌ Erro da API:', result);
-        
         if (updateRes.status === 400 && result.errors) {
           const validationErrors = Object.entries(result.errors)
             .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
@@ -945,7 +865,6 @@ export default function EditarImovelPage() {
       return result.data || result;
 
     } catch (error: any) {
-      console.error('❌ Erro no handleSubmit:', error);
       throw new Error(`Erro ao atualizar imóvel: ${error.message}`);
     }
   };
@@ -962,11 +881,8 @@ export default function EditarImovelPage() {
   };
 
   const canNavigateToStep = (targetStep: number, currentStep: number, data: any): boolean => {
-    // Sempre permite voltar
     if (targetStep < currentStep) return true;
     
-    // Para avançar, verifica se o step atual é válido
-    // Implemente a lógica de validação se necessário
     return true;
   };
 

@@ -2,7 +2,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import DynamicFormManager from '@/components/DynamicFormManager';
 import { FormStep } from '@/types/types';
 import { useMessageContext } from '@/contexts/MessageContext';
@@ -11,7 +10,10 @@ import {
   Home, MapPin, DollarSign, Upload, Building2, 
   Key, FileText, BedDouble, Bath, Car, Ruler, Sofa,
   HomeIcon, User, Building, DollarSign as Dollar,
-  Calendar, File
+  Calendar, File,
+  MapPinIcon,
+  Hash,
+  Globe
 } from 'lucide-react';
 
 const formatMoney = (value: number | string) => {
@@ -42,7 +44,6 @@ export default function VisualizarImovelPage() {
   const params = useParams();
   const id = params.id as string;
   
-  const { user } = useAuth();
   const { showMessage } = useMessageContext();
   const router = useRouter();
   
@@ -54,7 +55,6 @@ export default function VisualizarImovelPage() {
   const [loadingProperty, setLoadingProperty] = useState(true);
   const [completedSteps] = useState<number[]>([0, 1, 2, 3]);
 
-  // Buscar dados para selects
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -80,7 +80,6 @@ export default function VisualizarImovelPage() {
         setPropertyTypes(typesList);
         setAgencies(agenciesList);
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
         showMessage('Erro ao carregar dados iniciais', 'error');
       } finally {
         setLoadingData(false);
@@ -90,17 +89,14 @@ export default function VisualizarImovelPage() {
     fetchInitialData();
   }, [showMessage]);
 
-  // Buscar dados do imóvel
   useEffect(() => {
     const fetchPropertyData = async () => {
       if (!id) {
-        console.error('ID do imóvel não encontrado');
         return;
       }
 
       try {
         setLoadingProperty(true);
-        console.log('🔍 Buscando dados do imóvel ID:', id);
         
         const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/properties/${id}`);
         
@@ -109,16 +105,13 @@ export default function VisualizarImovelPage() {
         }
 
         const data = await response.json();
-        console.log('📊 Dados recebidos do imóvel:', data);
         
         if (data.success && data.data) {
           setPropertyData(data.data);
-          console.log('✅ Dados do imóvel carregados com sucesso');
         } else {
           throw new Error(data.message || 'Erro ao carregar dados do imóvel');
         }
       } catch (error: any) {
-        console.error('❌ Erro ao buscar dados do imóvel:', error.message);
         showMessage(`Erro ao carregar dados do imóvel: ${error.message}`, 'error');
         router.push('/dashboard/imoveis');
       } finally {
@@ -129,47 +122,25 @@ export default function VisualizarImovelPage() {
     fetchPropertyData();
   }, [id, router, showMessage]);
 
-  // Função para transformar os dados da API para o formato do formulário
   const transformData = (apiResponse: any) => {
-    console.log('🔄 transformData chamado com:', apiResponse);
-    
-    // A API retorna { success: true, data: {...}, message: ... }
     const data = apiResponse.data || apiResponse;
     
     if (!data) {
-      console.error('❌ Dados não encontrados na resposta da API');
       return {};
     }
-    
-    console.log('📊 Dados extraídos para transformação:', data);
     
     const address = data.addresses?.[0]?.address || {};
     const values = data.values?.[0] || {};
 
-    const getDocumentTypeName = (type: string) => {
-      const typeMap: Record<string, string> = {
-        'IMAGE': 'Imagem',
-        'REGISTRATION': 'Matrícula',
-        'PROPERTY_RECORD': 'Registro',
-        'TITLE_DEED': 'Escritura',
-        'OTHER': 'Outro Documento'
-      };
-      return typeMap[type] || type;
-    };
-    
-    // Extrair nome do arquivo do caminho
     const extractFileName = (filePath: string) => {
       if (!filePath) return 'Arquivo';
       const parts = filePath.split('/');
       const fileNameWithTimestamp = parts[parts.length - 1];
-      // Remove o timestamp (ex: 1769815258758-)
       const fileName = fileNameWithTimestamp.replace(/^\d+-/, '');
       return decodeURIComponent(fileName);
     };
 
-    // Transformar os dados para o formato esperado pelo formulário
     const transformed = {
-      // Dados básicos do imóvel
       title: data.title || '',
       bedrooms: data.bedrooms?.toString() || '',
       bathrooms: data.bathrooms?.toString() || '',
@@ -186,7 +157,6 @@ export default function VisualizarImovelPage() {
       furnished: data.furnished?.toString() || 'false',
       notes: data.notes || '',
       
-      // Endereço
       zip_code: address.zip_code || '',
       street: address.street || '',
       number: address.number || '',
@@ -195,18 +165,16 @@ export default function VisualizarImovelPage() {
       state: address.state || '',
       country: address.country || 'Brasil',
       
-      // Valores
       purchase_value: formatMoney(values.purchase_value || ''),
       rental_value: formatMoney(values.rental_value || ''),
       condo_fee: formatMoney(values.condo_fee || ''),
       property_tax: formatMoney(values.property_tax || ''),
       status: values.status || 'AVAILABLE',
-      reference_date: values.reference_date ? values.reference_date.split('T')[0] : '',
+      sale_date: values.sale_date ? values.sale_date.split('T')[0] : '',
       values_notes: values.notes || '',
-      sale_value: '',
-      extra_charges: '',
+      sale_value: formatMoney(values.sale_value || ''),
+      extra_charges: formatMoney(values.extra_charges || ''),
       
-      // Arquivos - FORMATO CORRETO baseado no retorno da API
       arquivosImagens: data.documents
         ?.filter((doc: any) => doc.type === 'IMAGE')
         .map((doc: any) => ({
@@ -260,13 +228,6 @@ export default function VisualizarImovelPage() {
         })) || [],
     };
 
-    console.log('✅ Dados transformados:', {
-      ...transformed,
-      arquivosImagens: transformed.arquivosImagens.map((img: any) => ({
-        ...img,
-        file_url: img.file_url?.substring(0, 50) + '...'
-      }))
-    });
     return transformed;
   };
 
@@ -339,7 +300,7 @@ export default function VisualizarImovelPage() {
           field: 'floor_number',
           label: 'Número do Andar',
           type: 'number',
-          required: true,
+          required: false,
           placeholder: 'Número do andar',
           showIncrementButtons: false,
           min: 0,
@@ -477,7 +438,7 @@ export default function VisualizarImovelPage() {
           required: true,
           placeholder: '00000-000',
           mask: 'cep',
-          icon: <MapPin size={20} />,
+          icon: <MapPinIcon size={20} />,
           className: 'col-span-full',
           disabled: true,
           readOnly: true,
@@ -488,7 +449,7 @@ export default function VisualizarImovelPage() {
           type: 'text',
           required: true,
           placeholder: 'Rua das Flores',
-          icon: <MapPin size={20} />,
+          icon: <MapPinIcon size={20} />,
           className: 'col-span-full',
           disabled: true,
           readOnly: true,
@@ -499,7 +460,7 @@ export default function VisualizarImovelPage() {
           type: 'text',
           required: true,
           placeholder: '123',
-          icon: <MapPin size={20} />,
+          icon: <Hash size={20} />,
           disabled: true,
           readOnly: true,
         },
@@ -509,7 +470,7 @@ export default function VisualizarImovelPage() {
           type: 'text',
           required: true,
           placeholder: 'Centro',
-          icon: <MapPin size={20} />,
+          icon: <MapPinIcon size={20} />,
           disabled: true,
           readOnly: true,
         },
@@ -519,7 +480,7 @@ export default function VisualizarImovelPage() {
           type: 'text',
           required: true,
           placeholder: 'São Paulo',
-          icon: <MapPin size={20} />,
+          icon: <MapPinIcon size={20} />,
           disabled: true,
           readOnly: true,
         },
@@ -529,7 +490,7 @@ export default function VisualizarImovelPage() {
           type: 'text',
           required: true,
           placeholder: 'SP',
-          icon: <MapPin size={20} />,
+          icon: <Globe size={20} />,
           disabled: true,
           readOnly: true,
         },
@@ -540,7 +501,7 @@ export default function VisualizarImovelPage() {
           required: true,
           placeholder: 'Brasil',
           defaultValue: 'Brasil',
-          icon: <MapPin size={20} />,
+          icon: <Globe size={20} />,
           disabled: true,
           readOnly: true,
         },
@@ -576,7 +537,7 @@ export default function VisualizarImovelPage() {
           field: 'condo_fee',
           label: 'Valor Condomínio',
           type: 'text',
-          required: true,
+          required: false,
           placeholder: 'R$ 500,00',
           mask: 'money',
           icon: <Building size={20} />,
@@ -608,10 +569,10 @@ export default function VisualizarImovelPage() {
           readOnly: true,
         },
         {
-          field: 'reference_date',
-          label: 'Data de Referência',
+          field: 'sale_date',
+          label: 'Data da Venda',
           type: 'date',
-          required: true,
+          required: false,
           icon: <Calendar size={20} />,
           className: 'col-span-full',
           disabled: true,
@@ -658,15 +619,15 @@ export default function VisualizarImovelPage() {
       fields: [
         {
           field: 'arquivosImagens',
-          label: 'Imagens',
+          label: 'Imagens e Vídeos',
           type: 'file',
-          accept: 'image/*',
+          accept: 'image/*,video/mp4,video/webm',
           multiple: true,
-          textButton: 'Selecionar Imagens',
+          textButton: 'Selecionar Mídias',
           placeholder: 'Nenhum arquivo selecionado',
           icon: <Upload size={20} />,
-          className: 'col-span-full block w-full h-full',
-          maxFiles: 20,
+          className: 'col-span-full w-full',
+          maxFiles: 30,
           disabled: true,
           readOnly: true,
         },
@@ -675,9 +636,10 @@ export default function VisualizarImovelPage() {
           label: 'Matrícula',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
-          className: 'flex-1 w-full min-h-[200px] max-h-[200px]',
+          className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
           icon: <File size={20} />,
           disabled: true,
@@ -688,7 +650,8 @@ export default function VisualizarImovelPage() {
           label: 'Registro',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -701,7 +664,8 @@ export default function VisualizarImovelPage() {
           label: 'Escritura',
           type: 'file',
           accept: '.pdf',
-          multiple: false,
+          multiple: true,
+          maxFiles: 3,
           textButton: 'Escolher arquivos',
           className: 'flex-1 w-full',
           placeholder: 'Nenhum arquivo selecionado',
@@ -713,26 +677,19 @@ export default function VisualizarImovelPage() {
     },
   ], [owners, propertyTypes, agencies, loadingData]);
 
-  // Handler para mudança de campo - na visualização não faz nada
   const handleFieldChange = async () => {
     return null;
   };
 
-  // Na visualização, não há submit
   const handleSubmit = async () => {
     return null;
   };
 
-  const onSubmitSuccess = () => {
-    // Não aplicável para visualização
-  };
+  const onSubmitSuccess = () => {};
 
-  const handleStepComplete = () => {
-    // Não faz nada na visualização
-  };
+  const handleStepComplete = () => {};
 
   const canNavigateToStep = () => {
-    // Na visualização, permite navegar livremente
     return true;
   };
 

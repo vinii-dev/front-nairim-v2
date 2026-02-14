@@ -235,7 +235,6 @@ export default function DynamicFormManager({
           }
 
         } catch (error) {
-          console.error(`Erro ao buscar dados de ${resource}:`, error);
           showMessage(`Erro ao carregar ${title.toLowerCase()}.`, 'error');
           router.push(basePath);
         } finally {
@@ -514,7 +513,6 @@ export default function DynamicFormManager({
         }
       }
     } catch (error: any) {
-      console.error('Erro no formulário:', error);
       showMessage(error.message || `Erro ao salvar ${title.toLowerCase()}.`, 'error');
     } finally {
       setSubmitting(false);
@@ -528,7 +526,6 @@ export default function DynamicFormManager({
       try {
         return !field.hidden(formValues);
       } catch (error) {
-        console.error('Erro ao verificar se campo está oculto:', error);
         return true;
       }
     }
@@ -836,7 +833,7 @@ export default function DynamicFormManager({
           svg={currentStepData?.icon}
         >
           {visibleFields.length > 0 ? (
-            <div className="w-full flex flex-wrap gap-3 h-full">
+            <div className="w-full flex flex-wrap gap-3 h-full md:flex-row flex-column">
               {visibleFields.map((field, index) => renderField(field, index))}
             </div>
           ) : (

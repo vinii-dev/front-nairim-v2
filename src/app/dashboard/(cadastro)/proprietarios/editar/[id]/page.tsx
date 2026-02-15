@@ -59,9 +59,7 @@ export default function EditarProprietarioPage() {
 
   const handleSubmit = async (data: any) => {
     try {
-      console.log('✏️ Atualizando proprietário...', data);
-      
-      const tipo = data.cpf ? 'fisica' : 'juridica';
+      const tipo = data.owner_type || (data.cpf ? 'fisica' : 'juridica');
       
       const formattedData: any = {
         name: data.name,
@@ -111,10 +109,11 @@ export default function EditarProprietarioPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        if (response.status === 400 && result.errors) throw new Error(`Erro: ${result.errors.join(', ')}`);
+        if (response.status === 400 && result.errors) throw new Error(`Erro de validação: ${result.errors.join(', ')}`);
         if (response.status === 409) {
           if (result.message?.includes('CPF')) throw new Error('CPF já cadastrado');
           if (result.message?.includes('CNPJ')) throw new Error('CNPJ já cadastrado');
+          if (result.message?.includes('internal_code')) throw new Error('Código Interno já está em uso por outro proprietário');
         }
         throw new Error(result.message || 'Erro ao atualizar');
       }
@@ -122,8 +121,7 @@ export default function EditarProprietarioPage() {
       return result;
 
     } catch (error: any) {
-      console.error('❌ Erro na edição:', error);
-      throw new Error(`Erro ao atualizar: ${error.message}`);
+      throw new Error(error.message);
     }
   };
 
@@ -133,6 +131,7 @@ export default function EditarProprietarioPage() {
     const address = apiData.addresses?.[0]?.address || {};
     
     return {
+      owner_type: apiData.cpf ? 'fisica' : 'juridica',
       name: apiData.name || '',
       internal_code: apiData.internal_code || '',
       occupation: apiData.occupation || '',
@@ -163,6 +162,12 @@ export default function EditarProprietarioPage() {
       icon: <User size={20} />,
       fields: [
         {
+          field: 'owner_type',
+          label: '',
+          type: 'text',
+          hidden: true,
+        },
+        {
           field: 'name',
           label: 'Nome/Razão Social',
           type: 'text',
@@ -174,60 +179,72 @@ export default function EditarProprietarioPage() {
           field: 'internal_code',
           label: 'Código Interno',
           type: 'text',
+          required: true,
           placeholder: 'Código interno',
           icon: <Hash size={20} />,
-          hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
         },
         {
           field: 'occupation',
           label: 'Profissão',
           type: 'text',
+          required: true,
           placeholder: 'Profissão',
           icon: <Briefcase size={20} />,
           className: 'col-span-full',
-          hidden: (formValues: any) => !formValues.occupation,
+          hidden: (formValues: any) => formValues.owner_type === 'juridica',
         },
         {
           field: 'marital_status',
           label: 'Estado Civil',
-          type: 'text',
-          placeholder: 'Estado civil',
+          type: 'select',
+          required: true,
+          options: [
+            { value: 'Solteiro(a)', label: 'Solteiro(a)' },
+            { value: 'Casado(a)', label: 'Casado(a)' },
+            { value: 'Separado(a) judicialmente', label: 'Separado(a) judicialmente' },
+            { value: 'Divorciado(a)', label: 'Divorciado(a)' },
+            { value: 'Viúvo(a)', label: 'Viúvo(a)' }
+          ],
           icon: <Heart size={20} />,
-          hidden: (formValues: any) => !formValues.marital_status,
+          hidden: (formValues: any) => formValues.owner_type === 'juridica',
         },
         {
           field: 'cpf',
           label: 'CPF',
           type: 'text',
+          required: true,
           placeholder: '000.000.000-00',
           mask: 'cpf',
           icon: <FileText size={20} />,
-          hidden: (formValues: any) => !formValues.cpf,
+          hidden: (formValues: any) => formValues.owner_type === 'juridica',
         },
         {
           field: 'cnpj',
           label: 'CNPJ',
           type: 'text',
+          required: true,
           placeholder: '00.000.000/0000-00',
           mask: 'cnpj',
           icon: <FileText size={20} />,
-          hidden: (formValues: any) => !formValues.cnpj,
+          hidden: (formValues: any) => formValues.owner_type === 'fisica',
         },
         {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
+          required: true,
           placeholder: 'Inscrição estadual',
           icon: <BuildingIcon size={20} />,
-          hidden: (formValues: any) => !formValues.state_registration,
+          hidden: (formValues: any) => formValues.owner_type === 'fisica',
         },
         {
           field: 'municipal_registration',
           label: 'Inscrição Municipal',
           type: 'text',
+          required: true,
           placeholder: 'Inscrição municipal',
           icon: <BuildingIcon size={20} />,
-          hidden: (formValues: any) => !formValues.municipal_registration,
+          hidden: (formValues: any) => formValues.owner_type === 'fisica',
         },
       ],
     },

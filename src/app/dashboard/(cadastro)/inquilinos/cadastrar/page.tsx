@@ -49,13 +49,17 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
           
           if (!response.ok) {
-            throw new Error(`Erro ${response.status}`);
+            if (response.status === 404) {
+              throw new Error('CEP não encontrado. Verifique o número digitado.');
+            }
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || errorData.message || 'Não foi possível buscar o CEP no momento.');
           }
 
           const data = await response.json();
           
-          if (data.error) {
-            showMessage(data.error, 'error');
+          if (data.error || data.erro) {
+            showMessage(data.error || 'CEP não encontrado. Verifique o número digitado.', 'error');
             return null;
           } else {
             showMessage('Endereço preenchido automaticamente!', 'success');
@@ -92,7 +96,6 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
             city: data.city,
             state: data.state,
             country: data.country || 'Brasil',
-            complement: data.complement || null,
           }
         ],
         contacts: data.contacts?.map((c: any) => ({
@@ -132,6 +135,9 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
         if (response.status === 409) {
           if (result.message?.includes('CPF')) throw new Error('CPF já cadastrado');
           if (result.message?.includes('CNPJ')) throw new Error('CNPJ já cadastrado');
+          if (result.message?.includes('internal_code') || result.message?.includes('Código Interno')) {
+            throw new Error('Código Interno já está em uso por outro inquilino');
+          }
         }
         if (response.status === 400 && result.errors) {
             throw new Error(`Erro de validação: ${result.errors.join(', ')}`);
@@ -169,6 +175,7 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
             field: 'internal_code',
             label: 'Código Interno',
             type: 'text',
+            required: true,
             placeholder: 'Código interno',
             icon: <Hash size={20} />,
           },
@@ -177,13 +184,21 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
               field: 'occupation',
               label: 'Profissão',
               type: 'text',
+              placeholder: 'Profissão',
               icon: <Briefcase size={20} />,
               className: 'col-span-full',
             } as any,
             {
               field: 'marital_status',
               label: 'Estado Civil',
-              type: 'text',
+              type: 'select',
+              options: [
+                { value: 'Solteiro(a)', label: 'Solteiro(a)' },
+                { value: 'Casado(a)', label: 'Casado(a)' },
+                { value: 'Separado(a) judicialmente', label: 'Separado(a) judicialmente' },
+                { value: 'Divorciado(a)', label: 'Divorciado(a)' },
+                { value: 'Viúvo(a)', label: 'Viúvo(a)' }
+              ],
               icon: <Heart size={20} />,
             } as any,
             {
@@ -191,6 +206,7 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
               label: 'CPF',
               type: 'text',
               required: true,
+              placeholder: '000.000.000-00',
               mask: 'cpf',
               icon: <FileText size={20} />,
             } as any,
@@ -201,6 +217,7 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
               label: 'CNPJ',
               type: 'text',
               required: true,
+              placeholder: '00.000.000/0000-00',
               mask: 'cnpj',
               icon: <FileText size={20} />,
             } as any,
@@ -208,12 +225,14 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
               field: 'state_registration',
               label: 'Inscrição Estadual',
               type: 'text',
+              placeholder: 'Inscrição Estadual',
               icon: <BuildingIcon size={20} />,
             } as any,
             {
               field: 'municipal_registration',
               label: 'Inscrição Municipal',
               type: 'text',
+              placeholder: 'Inscrição Municipal',
               icon: <BuildingIcon size={20} />,
             } as any,
           ] : []),
@@ -223,14 +242,13 @@ export default function CadastrarInquilinoPage({ searchParams }: Props) {
         title: 'Endereço',
         icon: <MapPin size={20} />,
         fields: [
-          { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
-          { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
-          { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
-          { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} /> },
-          { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-          { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-          { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },
-          { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
+          { field: 'zip_code', label: 'CEP', type: 'text', required: true, placeholder: '00000-000', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
+          { field: 'street', label: 'Rua', type: 'text', required: true, placeholder: 'Rua das Flores', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+          { field: 'number', label: 'Número', type: 'text', required: true, placeholder: '123', icon: <Hash size={20} /> },
+          { field: 'district', label: 'Bairro', type: 'text', required: true, placeholder: 'Centro', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+          { field: 'city', label: 'Cidade', type: 'text', required: true, placeholder: 'São Paulo', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
+          { field: 'state', label: 'Estado', type: 'text', required: true, placeholder: 'SP', icon: <Globe size={20} />, disabled: true, readOnly: true },
+          { field: 'country', label: 'País', type: 'text', required: true, placeholder: 'Brasil', defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
         ],
       },
       {

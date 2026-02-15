@@ -55,7 +55,7 @@ export default function EditarInquilinoPage() {
 
   const handleSubmit = async (data: any) => {
     try {
-      const tipo = data.cpf ? 'fisica' : 'juridica';
+      const tipo = data.tenant_type || (data.cpf ? 'fisica' : 'juridica');
       
       const formattedData: any = {
         name: data.name,
@@ -69,7 +69,6 @@ export default function EditarInquilinoPage() {
             city: data.city,
             state: data.state,
             country: data.country || 'Brasil',
-            complement: data.complement || null,
           }
         ],
         contacts: data.contacts?.map((c: any) => ({
@@ -109,14 +108,20 @@ export default function EditarInquilinoPage() {
         if (response.status === 409) {
           if (result.message?.includes('CPF')) throw new Error('CPF já cadastrado');
           if (result.message?.includes('CNPJ')) throw new Error('CNPJ já cadastrado');
+          if (result.message?.includes('internal_code') || result.message?.includes('Código Interno')) {
+            throw new Error('Código Interno já está em uso por outro inquilino');
+          }
         }
-        throw new Error(result.message || `Erro ${response.status}`);
+        if (response.status === 400 && result.errors && result.errors.length > 0) {
+            throw new Error(`Erro de validação: ${result.errors.join(', ')}`);
+        }
+        throw new Error(result.message || `Erro ao salvar inquilino (${response.status})`);
       }
 
       return result;
 
     } catch (error: any) {
-      throw new Error(`Erro ao atualizar: ${error.message}`);
+      throw new Error(error.message);
     }
   };
 
@@ -125,6 +130,7 @@ export default function EditarInquilinoPage() {
     const address = apiData.addresses?.[0]?.address || {};
     
     return {
+      tenant_type: apiData.cpf ? 'fisica' : 'juridica',
       name: apiData.name || '',
       internal_code: apiData.internal_code || '',
       occupation: apiData.occupation || '',
@@ -140,7 +146,6 @@ export default function EditarInquilinoPage() {
       city: address.city || '',
       state: address.state || '',
       country: address.country || 'Brasil',
-      complement: address.complement || '',
       contacts: apiData.contacts?.map((c: any) => ({
         contact: c.contact?.contact || c.contact || '', 
         phone: c.contact?.phone || c.phone || '',
@@ -156,6 +161,12 @@ export default function EditarInquilinoPage() {
       icon: <User size={20} />,
       fields: [
         {
+          field: 'tenant_type',
+          label: '',
+          type: 'text',
+          hidden: true,
+        },
+        {
           field: 'name',
           label: 'Nome/Razão Social',
           type: 'text',
@@ -168,53 +179,66 @@ export default function EditarInquilinoPage() {
           field: 'internal_code',
           label: 'Código Interno',
           type: 'text',
+          required: true,
           icon: <Hash size={20} />,
-          hidden: (formValues: any) => !formValues.internal_code || formValues.internal_code.trim() === '',
         },
         {
           field: 'occupation',
           label: 'Profissão',
           type: 'text',
+          required: true,
           icon: <Briefcase size={20} />,
           className: 'col-span-full',
-          hidden: (formValues: any) => !formValues.occupation,
+          hidden: (formValues: any) => formValues.tenant_type === 'juridica',
         },
         {
           field: 'marital_status',
           label: 'Estado Civil',
-          type: 'text',
+          type: 'select',
+          required: true,
+          options: [
+            { value: 'Solteiro(a)', label: 'Solteiro(a)' },
+            { value: 'Casado(a)', label: 'Casado(a)' },
+            { value: 'Separado(a) judicialmente', label: 'Separado(a) judicialmente' },
+            { value: 'Divorciado(a)', label: 'Divorciado(a)' },
+            { value: 'Viúvo(a)', label: 'Viúvo(a)' }
+          ],
           icon: <Heart size={20} />,
-          hidden: (formValues: any) => !formValues.marital_status,
+          hidden: (formValues: any) => formValues.tenant_type === 'juridica',
         },
         {
           field: 'cpf',
           label: 'CPF',
           type: 'text',
+          required: true,
           mask: 'cpf',
           icon: <FileText size={20} />,
-          hidden: (formValues: any) => !formValues.cpf,
+          hidden: (formValues: any) => formValues.tenant_type === 'juridica',
         },
         {
           field: 'cnpj',
           label: 'CNPJ',
           type: 'text',
+          required: true,
           mask: 'cnpj',
           icon: <FileText size={20} />,
-          hidden: (formValues: any) => !formValues.cnpj,
+          hidden: (formValues: any) => formValues.tenant_type === 'fisica',
         },
         {
           field: 'state_registration',
           label: 'Inscrição Estadual',
           type: 'text',
+          required: true,
           icon: <BuildingIcon size={20} />,
-          hidden: (formValues: any) => !formValues.state_registration,
+          hidden: (formValues: any) => formValues.tenant_type === 'fisica',
         },
         {
           field: 'municipal_registration',
           label: 'Inscrição Municipal',
           type: 'text',
+          required: true,
           icon: <BuildingIcon size={20} />,
-          hidden: (formValues: any) => !formValues.municipal_registration,
+          hidden: (formValues: any) => formValues.tenant_type === 'fisica',
         },
       ],
     },
@@ -225,7 +249,6 @@ export default function EditarInquilinoPage() {
         { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
         { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
         { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
-        { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} /> },
         { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
         { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
         { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },

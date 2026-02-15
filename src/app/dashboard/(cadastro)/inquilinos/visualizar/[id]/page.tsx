@@ -38,7 +38,6 @@ export default function VisualizarInquilinoPage() {
       city: address.city || '',
       state: address.state || '',
       country: address.country || 'Brasil',
-      complement: address.complement || '',
       contacts: apiData.contacts?.map((c: any) => ({
         contact: c.contact?.contact || c.contact || '', 
         phone: c.contact?.phone || c.phone || '',
@@ -132,7 +131,6 @@ export default function VisualizarInquilinoPage() {
         { field: 'zip_code', label: 'CEP', type: 'text', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
         { field: 'street', label: 'Rua', type: 'text', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
         { field: 'number', label: 'Número', type: 'text', icon: <Hash size={20} />, readOnly: true },
-        { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} />, readOnly: true },
         { field: 'district', label: 'Bairro', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
         { field: 'city', label: 'Cidade', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
         { field: 'state', label: 'Estado', type: 'text', icon: <Globe size={20} />, readOnly: true },

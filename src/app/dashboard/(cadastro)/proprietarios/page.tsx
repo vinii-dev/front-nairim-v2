@@ -1,4 +1,3 @@
-// app/dashboard/proprietarios/page.tsx
 'use client';
 
 import Section from "@/components/Section";
@@ -12,6 +11,12 @@ export default function ProprietariosPage() {
       label: "Nome",
       sortParam: "name",
       type: "text"
+    },
+    {
+      field: "person_type",
+      label: "Pessoa",
+      type: "text",
+      sortParam: "cpf"
     },
     {
       field: "internal_code",

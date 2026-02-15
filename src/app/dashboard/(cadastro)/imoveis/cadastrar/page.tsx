@@ -17,28 +17,20 @@ import {
   Globe
 } from 'lucide-react';
 
-const parseMetric = (value: string) => {
+const parseMetric = (value: string | number) => {
   if (!value) return 0;
-  const cleaned = value.replace(' m²', '').replace(' m', '').replace(/\./g, '').replace(',', '.');
-  return parseFloat(cleaned) || 0;
+  const numericValue = typeof value === 'string' ? value.replace(/[^\d.]/g, '') : value.toString();
+  return parseFloat(numericValue) || 0;
 };
 
-const parseMoney = (value: string) => {
-  if (!value) return 0;
+const parseMoney = (value: string | number) => {
+  if (!value && value !== 0 && value !== '0' && value !== '000') return 0;
   
-  const cleaned = value
-    .replace('R$', '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .trim();
-    
-  const parsed = parseFloat(cleaned);
-  
-  if (isNaN(parsed)) {
-    return 0;
-  }
-  
-  return parsed;
+  // Como o unmasked value do money vem apenas dígitos da nossa máscara (ex: "300000" para R$ 3.000,00)
+  // dividimos por 100 para pegar os centavos corretos.
+  const numericValue = typeof value === 'string' ? value.replace(/\D/g, '') : value.toString();
+  if (!numericValue) return 0;
+  return parseFloat(numericValue) / 100;
 };
 
 export default function CadastrarImovelPage() {
@@ -146,7 +138,8 @@ export default function CadastrarImovelPage() {
     for (const field of stepFields) {
       if (field.required) {
         const value = data[field.field];
-        if (!value || (typeof value === 'string' && value.trim() === '')) {
+        // Um valor "0" de dinheiro mascara para "000" numérico, vamos deixar passar se for exigido numérico.
+        if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
           return false;
         }
       }
@@ -225,7 +218,7 @@ export default function CadastrarImovelPage() {
           label: 'Área Total (m²)',
           type: 'text',
           required: true,
-          placeholder: 'Área total em m²',
+          placeholder: 'Área total',
           mask: 'metros2',
           icon: <Ruler size={20} />,
         },
@@ -234,7 +227,7 @@ export default function CadastrarImovelPage() {
           label: 'Área Construída (m²)',
           type: 'text',
           required: true,
-          placeholder: 'Área construída em m²',
+          placeholder: 'Área construída',
           mask: 'metros2',
           icon: <Ruler size={20} />,
         },
@@ -243,7 +236,7 @@ export default function CadastrarImovelPage() {
           label: 'Testada (m)',
           type: 'text',
           required: true,
-          placeholder: 'Testada em metros',
+          placeholder: 'Testada',
           mask: 'metros',
           icon: <Ruler size={20} />,
         },
@@ -275,6 +268,7 @@ export default function CadastrarImovelPage() {
           label: 'Tipo do imóvel',
           type: 'select',
           required: true,
+          searchable: true,
           options: loadingData 
             ? [{ label: 'Carregando...', value: '' }]
             : propertyTypes.map((type) => ({ 
@@ -353,6 +347,30 @@ export default function CadastrarImovelPage() {
           required: true,
           placeholder: '123',
           icon: <Hash size={20} />,
+        },
+        {
+          field: 'complement',
+          label: 'Complemento',
+          type: 'text',
+          placeholder: 'Sala 12',
+          icon: <MapPinIcon size={20} />,
+          required: false,
+        },
+        {
+          field: 'block',
+          label: 'Quadra',
+          type: 'text',
+          placeholder: 'Ex: 55',
+          icon: <MapPinIcon size={20} />,
+          required: false,
+        },
+        {
+          field: 'lot',
+          label: 'Lote',
+          type: 'text',
+          placeholder: 'Ex: 5P6P',
+          icon: <MapPinIcon size={20} />,
+          required: false,
         },
         {
           field: 'district',
@@ -567,6 +585,9 @@ export default function CadastrarImovelPage() {
         zip_code: data.zip_code,
         street: data.street,
         number: data.number,
+        complement: data.complement || null,
+        block: data.block || null,
+        lot: data.lot || null,
         district: data.district,
         city: data.city,
         state: data.state,

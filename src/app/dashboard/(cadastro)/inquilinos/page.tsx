@@ -13,12 +13,17 @@ export default function InquilinosPage() {
       type: "text"
     },
     {
+      field: "person_type",
+      label: "Pessoa",
+      type: "text",
+      sortParam: "cpf"
+    },
+    {
       field: "internal_code",
       label: "Código Interno",
       sortParam: "internal_code",
       type: "text"
     },
-    // Campos PF
     {
       field: "occupation",
       label: "Profissão",
@@ -38,7 +43,6 @@ export default function InquilinosPage() {
       type: "text",
       formatter: "cpfCnpj"
     },
-    // Campos PJ
     {
       field: "cnpj",
       label: "CNPJ",
@@ -56,7 +60,6 @@ export default function InquilinosPage() {
       label: "Inscrição Municipal",
       type: "text"
     },
-    // Endereço
     {
       field: "zip_code",
       label: "CEP",
@@ -88,7 +91,6 @@ export default function InquilinosPage() {
       type: "text",
       sortParam: "street"
     },
-    // Contato
     {
       field: "contact",
       label: "Contato",

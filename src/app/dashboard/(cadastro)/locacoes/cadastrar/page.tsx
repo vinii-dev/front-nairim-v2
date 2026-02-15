@@ -12,30 +12,13 @@ import {
 } from 'lucide-react';
 
 const parseMoney = (value: string | number) => {
-  if (!value && value !== 0) return 0;
+  if (!value && value !== 0 && value !== '0' && value !== '000') return 0;
   
-  if (typeof value === 'number') {
-    return value;
-  }
+  // Extrai apenas os números (ex: "R$ 3.000,00" vira "300000") e divide por 100
+  const numericValue = typeof value === 'string' ? value.replace(/\D/g, '') : value.toString();
+  if (!numericValue) return 0;
   
-  const strValue = String(value).trim();
-  
-  if (!strValue.includes(',') && strValue.includes('.')) {
-    const parsed = parseFloat(strValue);
-    if (!isNaN(parsed)) return parsed;
-  }
-  
-  const cleaned = strValue
-    .replace(/[^\d,-]/g, '') 
-    .replace(',', '.');
-    
-  const parsed = parseFloat(cleaned);
-  
-  if (isNaN(parsed)) {
-    return 0;
-  }
-  
-  return parsed;
+  return parseFloat(numericValue) / 100;
 };
 
 const formatMoney = (value: number) => {
@@ -100,28 +83,22 @@ export default function CadastrarLocacaoPage() {
         const result = await response.json();
         const property = result.data || result;
         
-        const propertyValues = property.values?.[0] || {};
-        
+        // Zera os valores monetários em vez de puxar os antigos do imóvel
         const updates: any = {
           type_id: property.type_id,
           owner_id: property.owner_id,
           type_display: property.type?.description || 'Tipo não encontrado',
           owner_display: property.owner?.name || 'Proprietário não encontrado',
-          rent_amount: propertyValues.rental_value ? formatMoney(parseMoney(propertyValues.rental_value)) : 'R$ 0,00',
-          condo_fee: propertyValues.condo_fee ? formatMoney(parseMoney(propertyValues.condo_fee)) : 'R$ 0,00',
-          property_tax: propertyValues.property_tax ? formatMoney(parseMoney(propertyValues.property_tax)) : 'R$ 0,00',
-          extra_charges: propertyValues.extra_charges ? formatMoney(parseMoney(propertyValues.extra_charges)) : 'R$ 0,00',
+          rent_amount: 'R$ 0,00',
+          condo_fee: 'R$ 0,00',
+          property_tax: 'R$ 0,00',
+          extra_charges: 'R$ 0,00',
+          agency_commission: '',
+          commission_amount: 'R$ 0,00',
+          rent_due_day: '5',
+          tax_due_day: '10',
+          condo_due_day: '10'
         };
-
-        if (propertyValues.rental_value) {
-          updates.agency_commission = '5';
-          const rentValue = parseMoney(propertyValues.rental_value);
-          updates.commission_amount = formatMoney(rentValue * 0.05);
-        }
-
-        updates.rent_due_day = '5';
-        updates.tax_due_day = '10';
-        updates.condo_due_day = '10';
 
         showMessage('Dados do imóvel carregados com sucesso!', 'success');
         return updates;
@@ -137,11 +114,15 @@ export default function CadastrarLocacaoPage() {
         ? parseMoney(value) 
         : parseMoney(formValues?.rent_amount || 0);
       
-      const commissionPercent = fieldName === 'agency_commission'
-        ? parseFloat(value) || 0
-        : parseFloat(formValues?.agency_commission || 0);
+      const commissionPercentStr = fieldName === 'agency_commission'
+        ? String(value)
+        : String(formValues?.agency_commission || 0);
       
-      const commissionAmount = rentAmount * (commissionPercent / 100);
+      // Converte vírgula para ponto caso o usuário tenha digitado "5,5" por exemplo
+      const commissionPercent = parseFloat(commissionPercentStr.replace(',', '.')) || 0;
+      
+      // Cálculo de comissão: (Valor do Aluguel * Percentual) / 100
+      const commissionAmount = (rentAmount * commissionPercent) / 100;
       
       return {
         commission_amount: formatMoney(commissionAmount)
@@ -157,7 +138,8 @@ export default function CadastrarLocacaoPage() {
     for (const field of stepFields) {
       if (field.required && !field.hidden) {
         const value = data[field.field];
-        if (!value || (typeof value === 'string' && value.trim() === '')) {
+        // 0 é válido, só barramos se for null, undefined ou string vazia
+        if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
           return false;
         }
       }
@@ -276,6 +258,7 @@ export default function CadastrarLocacaoPage() {
           type: 'text',
           required: true,
           placeholder: 'R$ 0,00',
+          defaultValue: 'R$ 0,00',
           mask: 'money',
           icon: <DollarSign size={20} />,
         },
@@ -284,6 +267,7 @@ export default function CadastrarLocacaoPage() {
           label: 'Valor do Condomínio',
           type: 'text',
           placeholder: 'R$ 0,00',
+          defaultValue: 'R$ 0,00',
           mask: 'money',
           icon: <Building size={20} />,
         },
@@ -292,6 +276,7 @@ export default function CadastrarLocacaoPage() {
           label: 'Valor do IPTU',
           type: 'text',
           placeholder: 'R$ 0,00',
+          defaultValue: 'R$ 0,00',
           mask: 'money',
           icon: <File size={20} />,
         },
@@ -300,6 +285,7 @@ export default function CadastrarLocacaoPage() {
           label: 'Taxas Extras',
           type: 'text',
           placeholder: 'R$ 0,00',
+          defaultValue: 'R$ 0,00',
           mask: 'money',
           icon: <Calculator size={20} />,
         },
@@ -316,6 +302,7 @@ export default function CadastrarLocacaoPage() {
           label: 'Valor Comissão',
           type: 'text',
           placeholder: 'R$ 0,00',
+          defaultValue: 'R$ 0,00',
           mask: 'money',
           icon: <DollarSign size={20} />,
           readOnly: true,
@@ -368,12 +355,12 @@ export default function CadastrarLocacaoPage() {
         contract_number: data.contract_number,
         start_date: data.start_date,
         end_date: data.end_date,
-        rent_amount: parseMoney(data.rent_amount || 0),
-        condo_fee: data.condo_fee ? parseMoney(data.condo_fee) : null,
-        property_tax: data.property_tax ? parseMoney(data.property_tax) : null,
-        extra_charges: data.extra_charges ? parseMoney(data.extra_charges) : null,
-        agency_commission: data.agency_commission ? parseFloat(data.agency_commission) : null,
-        commission_amount: data.commission_amount ? parseMoney(data.commission_amount) : null,
+        rent_amount: parseMoney(data.rent_amount),
+        condo_fee: parseMoney(data.condo_fee),
+        property_tax: parseMoney(data.property_tax),
+        extra_charges: parseMoney(data.extra_charges),
+        agency_commission: data.agency_commission ? parseFloat(String(data.agency_commission).replace(',', '.')) : null,
+        commission_amount: parseMoney(data.commission_amount),
         rent_due_day: parseInt(data.rent_due_day) || 5,
         tax_due_day: data.tax_due_day ? parseInt(data.tax_due_day) : null,
         condo_due_day: data.condo_due_day ? parseInt(data.condo_due_day) : null,

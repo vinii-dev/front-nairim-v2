@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
 import Label from "../Label";
 
 export interface InputProps {
@@ -24,7 +24,6 @@ export interface InputProps {
   max?: number;
 }
 
-// Funções de máscara locais
 const maskCPF = (value: string): string => {
   const numbers = value.replace(/\D/g, '');
   if (numbers.length <= 3) return numbers;
@@ -60,16 +59,9 @@ const maskMoney = (value: string): string => {
   const numbers = value.replace(/\D/g, '');
   if (numbers.length === 0) return '';
   
-  // Se for apenas zeros, retorna vazio
-  if (parseInt(numbers) === 0) return '';
-  
-  // Remove zeros à esquerda
   const trimmedNumbers = numbers.replace(/^0+/, '') || '0';
-  
-  // Converte para centavos
   const amount = parseInt(trimmedNumbers) / 100;
   
-  // Formata como moeda
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -79,75 +71,40 @@ const maskMoney = (value: string): string => {
 };
 
 const maskMetros2 = (value: string): string => {
-  const cleaned = value.replace(/[^\d,.]/g, '');
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length === 0) return '';
   
-  if (cleaned.length === 0) return '';
-  
-  // Remove pontos que podem estar como separadores de milhar
-  const withoutThousandSeparators = cleaned.replace(/\./g, '');
-  
-  // Se tiver vírgula, trata como decimal
-  if (withoutThousandSeparators.includes(',')) {
-    const [integerPart, decimalPart] = withoutThousandSeparators.split(',');
-    // Formata a parte inteira com separadores de milhar
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    const formattedDecimal = decimalPart ? decimalPart.slice(0, 2) : '';
-    return `${formattedInteger}${formattedDecimal ? ',' + formattedDecimal : ''} m²`;
-  }
-  
-  // Se não tiver vírgula, formata como inteiro
-  // Verifica se é um número válido
-  const numValue = withoutThousandSeparators === '' ? '0' : withoutThousandSeparators;
-  const formattedInteger = numValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${formattedInteger} m²`;
+  const amount = parseInt(numbers) / 100;
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 };
 
 const maskMetros = (value: string): string => {
-  const cleaned = value.replace(/[^\d,.]/g, '');
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length === 0) return '';
   
-  if (cleaned.length === 0) return '';
-  
-  // Remove pontos que podem estar como separadores de milhar
-  const withoutThousandSeparators = cleaned.replace(/\./g, '');
-  
-  // Se tiver vírgula, trata como decimal
-  if (withoutThousandSeparators.includes(',')) {
-    const [integerPart, decimalPart] = withoutThousandSeparators.split(',');
-    // Formata a parte inteira com separadores de milhar
-    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    const formattedDecimal = decimalPart ? decimalPart.slice(0, 2) : '';
-    return `${formattedInteger}${formattedDecimal ? ',' + formattedDecimal : ''} m`;
-  }
-  
-  // Se não tiver vírgula, formata como inteiro
-  // Verifica se é um número válido
-  const numValue = withoutThousandSeparators === '' ? '0' : withoutThousandSeparators;
-  const formattedInteger = numValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${formattedInteger} m`;
+  const amount = parseInt(numbers) / 100;
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 };
 
 const applyMask = (maskType: 'cpf' | 'cnpj' | 'cep' | 'telefone' | 'money' | 'metros2' | 'metros', value: string): string => {
   switch (maskType) {
-    case "cpf":
-      return maskCPF(value);
-    case "cnpj":
-      return maskCNPJ(value);
-    case "cep":
-      return maskCEP(value);
-    case "telefone":
-      return maskPhone(value);
-    case "money":
-      return maskMoney(value);
-    case "metros2":
-      return maskMetros2(value);
-    case "metros":
-      return maskMetros(value);
-    default:
-      return value;
+    case "cpf": return maskCPF(value);
+    case "cnpj": return maskCNPJ(value);
+    case "cep": return maskCEP(value);
+    case "telefone": return maskPhone(value);
+    case "money": return maskMoney(value);
+    case "metros2": return maskMetros2(value);
+    case "metros": return maskMetros(value);
+    default: return value;
   }
 };
 
-// Função para remover a máscara para armazenamento
 const removeMask = (maskType: 'cpf' | 'cnpj' | 'cep' | 'telefone' | 'money' | 'metros2' | 'metros' | undefined, value: string): string => {
   if (!maskType) return value;
   
@@ -161,7 +118,10 @@ const removeMask = (maskType: 'cpf' | 'cnpj' | 'cep' | 'telefone' | 'money' | 'm
       return value.replace(/\D/g, '');
     case "metros2":
     case "metros":
-      return value.replace(/[^\d,.]/g, '').replace(/\./g, '').replace(',', '.');
+      const digits = value.replace(/\D/g, '');
+      if (!digits) return '';
+      const amount = parseInt(digits) / 100;
+      return amount.toString(); 
     default:
       return value;
   }
@@ -191,10 +151,7 @@ export default function Input({
   const [displayValue, setDisplayValue] = useState<string>('');
   const [isPasting, setIsPasting] = useState(false);
 
-  // Atualiza o valor de exibição quando o valor muda
   useEffect(() => {
-    console.log(`Input ${id} recebeu valor:`, value, 'máscara:', mask, 'disabled:', disabled);
-    
     if (value === undefined || value === null) {
       setDisplayValue('');
       return;
@@ -202,24 +159,13 @@ export default function Input({
     
     const stringValue = String(value);
     
-    // Se o valor estiver vazio, limpa o display
-    if (stringValue === '' || stringValue === '0' || stringValue === '0.00') {
-      setDisplayValue('');
-      return;
-    }
-    
-    // Aplica a máscara se existir
     if (mask) {
-      // Para campos com máscara, aplica a formatação
       const maskedValue = applyMask(mask, stringValue);
-      console.log(`Valor mascarado para ${id}:`, maskedValue);
       setDisplayValue(maskedValue);
     } else {
-      // Para campos sem máscara, usa o valor direto
-      console.log(`Valor direto para ${id}:`, stringValue);
       setDisplayValue(stringValue);
     }
-  }, [value, mask, id, disabled]);
+  }, [value, mask, disabled]);
 
   const handleIncrement = () => {
     if (disabled || type !== 'number') return;
@@ -241,34 +187,27 @@ export default function Input({
     onChange?.({ target: { value: String(newValue) } } as React.ChangeEvent<HTMLInputElement>);
   };
 
-const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  if (disabled) return;
-  
-  const rawValue = e.target.value;
-  
-  if (mask === 'cep') {
-    // Para CEP, mantemos a máscara no display
-    const numbersOnly = rawValue.replace(/\D/g, '');
-    const limitedNumbers = numbersOnly.slice(0, 8);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
     
-    // Aplica a máscara
-    const maskedValue = maskCEP(limitedNumbers);
-    setDisplayValue(maskedValue);
+    const rawValue = e.target.value;
     
-    // Envia o valor COM máscara para o onChange
-    // Isso é importante para que o handleFieldChange receba o valor formatado
-    onChange?.({ target: { value: maskedValue } } as React.ChangeEvent<HTMLInputElement>);
-  } else if (mask) {
-    // Para outras máscaras
-    const maskedValue = applyMask(mask, rawValue);
-    setDisplayValue(maskedValue);
-    const unmaskedValue = removeMask(mask, maskedValue);
-    onChange?.({ target: { value: unmaskedValue } } as React.ChangeEvent<HTMLInputElement>);
-  } else {
-    setDisplayValue(rawValue);
-    onChange?.(e);
-  }
-};
+    if (mask === 'cep') {
+      const numbersOnly = rawValue.replace(/\D/g, '');
+      const limitedNumbers = numbersOnly.slice(0, 8);
+      const maskedValue = maskCEP(limitedNumbers);
+      setDisplayValue(maskedValue);
+      onChange?.({ target: { value: maskedValue } } as React.ChangeEvent<HTMLInputElement>);
+    } else if (mask) {
+      const maskedValue = applyMask(mask, rawValue);
+      setDisplayValue(maskedValue);
+      const unmaskedValue = removeMask(mask, maskedValue);
+      onChange?.({ target: { value: unmaskedValue } } as React.ChangeEvent<HTMLInputElement>);
+    } else {
+      setDisplayValue(rawValue);
+      onChange?.(e);
+    }
+  };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     if (disabled) return;
@@ -278,22 +217,14 @@ const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setIsPasting(true);
       
       const pastedText = e.clipboardData.getData('text');
-      
-      // Remove não dígitos
       const numbersOnly = pastedText.replace(/\D/g, '');
       
       if (numbersOnly) {
-        // Limita a 8 dígitos
         const limitedNumbers = numbersOnly.slice(0, 8);
-        
-        // Aplica a máscara
         const maskedValue = maskCEP(limitedNumbers);
         setDisplayValue(maskedValue);
         
-        // Envia o valor sem máscara
         onChange?.({ target: { value: limitedNumbers } } as React.ChangeEvent<HTMLInputElement>);
-        
-        // Reset após pequeno delay
         setTimeout(() => setIsPasting(false), 100);
       }
     }

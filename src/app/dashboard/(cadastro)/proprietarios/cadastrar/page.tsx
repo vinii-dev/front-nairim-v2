@@ -139,6 +139,7 @@ export default function CadastrarProprietarioPage({ searchParams }: Props) {
         if (response.status === 409) {
           if (result.message?.includes('CPF')) throw new Error('CPF já cadastrado');
           if (result.message?.includes('CNPJ')) throw new Error('CNPJ já cadastrado');
+          if (result.message?.includes('internal_code')) throw new Error('Código Interno já está em uso por outro proprietário');
         }
         throw new Error(result.message || 'Erro no servidor');
       }
@@ -174,12 +175,25 @@ export default function CadastrarProprietarioPage({ searchParams }: Props) {
             field: 'internal_code',
             label: 'Código Interno',
             type: 'text',
+            required: true,
             placeholder: 'Código interno',
             icon: <Hash size={20} />,
           },
           ...(tipoSelecionado === 'fisica' ? [
-            { field: 'occupation', label: 'Profissão', type: 'text', icon: <Briefcase size={20} />, className: 'col-span-full' } as any,
-            { field: 'marital_status', label: 'Estado Civil', type: 'text', icon: <Heart size={20} /> } as any,
+            { field: 'occupation', label: 'Profissão', type: 'text', icon: <Briefcase size={20} />, className: 'col-span-full', placeholder: 'Profissão' } as any,
+            { 
+              field: 'marital_status', 
+              label: 'Estado Civil', 
+              type: 'select', 
+              options: [
+                { value: 'Solteiro(a)', label: 'Solteiro(a)' },
+                { value: 'Casado(a)', label: 'Casado(a)' },
+                { value: 'Separado(a) judicialmente', label: 'Separado(a) judicialmente' },
+                { value: 'Divorciado(a)', label: 'Divorciado(a)' },
+                { value: 'Viúvo(a)', label: 'Viúvo(a)' }
+              ],
+              icon: <Heart size={20} /> 
+            } as any,
             { field: 'cpf', label: 'CPF', type: 'text', required: true, placeholder: '000.000.000-00', mask: 'cpf', icon: <FileText size={20} /> } as any,
           ] : []),
           ...(tipoSelecionado === 'juridica' ? [

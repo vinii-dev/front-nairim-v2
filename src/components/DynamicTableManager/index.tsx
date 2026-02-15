@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -53,6 +54,10 @@ export default function DynamicTableManager({
   const [selectedCheckboxes, setSelectedCheckboxes] = useState<string[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<Record<string, any>>({});
   const [showOwnerTypeModal, setShowOwnerTypeModal] = useState(false);
+  
+  // Controle de largura das colunas
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+
   const router = useRouter();
   
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -87,11 +92,51 @@ export default function DynamicTableManager({
     return columns.filter(col => col.field !== "actions" && col.type !== "custom");
   }, [columns]);
 
-  const { items, meta } = useMemo(() => {
-    if (!data) {
-      return { items: [], meta: null };
+  // Define larguras padrão
+  useEffect(() => {
+    const initialWidths: Record<string, number> = {};
+    dataColumns.forEach(col => {
+      if (!columnWidths[col.field]) {
+        initialWidths[col.field] = ['email', 'name', 'street', 'address'].includes(col.field) ? 220 : 150;
+        if (col.field === 'person_type') initialWidths[col.field] = 70; // Coluna pessoa fina
+      }
+    });
+    if (Object.keys(initialWidths).length > 0) {
+      setColumnWidths(prev => ({ ...prev, ...initialWidths }));
     }
-    
+  }, [dataColumns]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Função e Refs para o Redimensionamento (Drag and Drop)
+  const isResizingRef = useRef<{field: string, startX: number, startWidth: number} | null>(null);
+
+  const handleMouseDownResize = useCallback((e: React.MouseEvent, field: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isResizingRef.current = {
+      field,
+      startX: e.pageX,
+      startWidth: columnWidths[field] || 150
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [columnWidths]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizingRef.current) return;
+    const { field, startX, startWidth } = isResizingRef.current;
+    const diff = e.pageX - startX;
+    const newWidth = Math.max(60, startWidth + diff); // Largura mínima de 60px
+    setColumnWidths(prev => ({ ...prev, [field]: newWidth }));
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isResizingRef.current = null;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseMove]);
+
+  const { items, meta } = useMemo(() => {
+    if (!data) return { items: [], meta: null };
     if (data.data && Array.isArray(data.data)) {
       return {
         items: data.data,
@@ -103,26 +148,8 @@ export default function DynamicTableManager({
         }
       };
     }
-    
-    if (data.items && Array.isArray(data.items)) {
-      return {
-        items: data.items,
-        meta: data.meta
-      };
-    }
-    
-    if (Array.isArray(data)) {
-      return {
-        items: data,
-        meta: {
-          page: 1,
-          limit: state.limit,
-          total: data.length,
-          totalPages: 1
-        }
-      };
-    }
-    
+    if (data.items && Array.isArray(data.items)) return { items: data.items, meta: data.meta };
+    if (Array.isArray(data)) return { items: data, meta: { page: 1, limit: state.limit, total: data.length, totalPages: 1 } };
     return { items: [], meta: null };
   }, [data, state.limit]);
 
@@ -143,15 +170,13 @@ export default function DynamicTableManager({
         }
         return acc?.[key];
       }, obj);
-    } catch (error) {
+    } catch {
       return undefined;
     }
   }, []);
 
-  const formatValue = useCallback((value: any, column: ColumnDef, item: any) => {
-    if (value === undefined || value === null || value === '') {
-      return '-';
-    }
+  const formatValue = useCallback((value: any, column: ColumnDef) => {
+    if (value === undefined || value === null || value === '') return '-';
 
     if (column.formatter) {
       switch (column.formatter) {
@@ -176,12 +201,26 @@ export default function DynamicTableManager({
 
   const getCellValue = useCallback((item: any, column: ColumnDef) => {
     try {
+      if (column.field === 'person_type') {
+        const cnpjStr = item.cnpj ? String(item.cnpj).replace(/\D/g, '') : '';
+        const cpfStr = item.cpf ? String(item.cpf).replace(/\D/g, '') : '';
+        
+        if (cnpjStr.length > 0) return 'J';
+        if (cpfStr.length > 0) return 'F';
+        return '-';
+      }
+
+      const isUser = resource === 'users';
+      if (isUser && ['name', 'email', 'gender', 'birth_date', 'created_at'].includes(column.field)) {
+        return formatValue(item[column.field], column);
+      }
+
       const contactFields = ['contact', 'telephone', 'phone', 'cellphone', 'email', 'contact_name'];
       
       if (contactFields.includes(column.field)) {
         if (item.contacts && Array.isArray(item.contacts) && item.contacts.length > 0) {
           return (
-            <div className="flex flex-col gap-1 w-full">
+            <div className="flex flex-col w-full">
               {item.contacts.map((contact: any, index: number) => {
                 let rawValue = '';
                 if (column.field === 'contact' || column.field === 'contact_name') rawValue = contact.contact;
@@ -189,10 +228,10 @@ export default function DynamicTableManager({
                 else if (column.field === 'telephone' || column.field === 'phone') rawValue = contact.phone;
                 else if (column.field === 'cellphone') rawValue = contact.cellphone;
 
-                const formattedValue = formatValue(rawValue, column, item);
+                const formattedValue = formatValue(rawValue, column);
                 return (
                   <div key={index} className="flex items-center justify-start whitespace-nowrap text-xs h-[20px]">
-                     <span className={!rawValue ? "text-gray-300" : ""}>
+                     <span className={!rawValue ? "text-gray-300 truncate w-full" : "truncate w-full"}>
                         {formattedValue !== '-' ? formattedValue : '-'}
                      </span>
                   </div>
@@ -204,17 +243,12 @@ export default function DynamicTableManager({
         return '-';
       }
 
-      const isUser = resource === 'users';
-      if (isUser && ['name', 'email', 'gender', 'birth_date', 'created_at'].includes(column.field)) {
-        return formatValue(item[column.field], column, item);
-      }
-
       const isLease = resource === 'leases';
       if (isLease) {
-        if (column.field === "property_title") return formatValue(item.property?.title, column, item);
-        if (column.field === "type") return formatValue(item.property?.type?.description, column, item);
-        if (column.field === "owner") return formatValue(item.owner?.name, column, item);
-        if (column.field === "tenant") return formatValue(item.tenant?.name, column, item);
+        if (column.field === "property_title") return formatValue(item.property?.title, column);
+        if (column.field === "type") return formatValue(item.property?.type?.description, column);
+        if (column.field === "owner") return formatValue(item.owner?.name, column);
+        if (column.field === "tenant") return formatValue(item.tenant?.name, column);
         if (['rent_due_day', 'tax_due_day', 'condo_due_day'].includes(column.field)) {
            return item[column.field] ? `${item[column.field]}º dia` : '-';
         }
@@ -227,9 +261,9 @@ export default function DynamicTableManager({
           'district': 'district', 'street': 'street', 'address': 'street', 'cep': 'zip_code'
         };
         const addressField = addressFieldMap[column.field];
-        if (addressField) return formatValue(item.addresses?.[0]?.address?.[addressField], column, item);
-        if (column.field === "owner") return formatValue(item.owner?.name, column, item);
-        if (column.field === "type") return formatValue(item.type?.description, column, item);
+        if (addressField) return formatValue(item.addresses?.[0]?.address?.[addressField], column);
+        if (column.field === "owner") return formatValue(item.owner?.name, column);
+        if (column.field === "type") return formatValue(item.type?.description, column);
       }
 
       const addressFieldMap: Record<string, {path: string, field: string}> = {
@@ -244,25 +278,25 @@ export default function DynamicTableManager({
 
       if (addressFieldMap[column.field]) {
         const { path, field } = addressFieldMap[column.field];
-        return formatValue(getNestedValue(item, `${path}.${field}`), column, item);
+        return formatValue(getNestedValue(item, `${path}.${field}`), column);
       }
 
       if (column.field in item) {
         const value = item[column.field];
         if (value && typeof value === 'object' && !Array.isArray(value)) {
-          if (value.name) return formatValue(value.name, column, item);
-          if (value.description) return formatValue(value.description, column, item);
-          if (value.title) return formatValue(value.title, column, item);
+          if (value.name) return formatValue(value.name, column);
+          if (value.description) return formatValue(value.description, column);
+          if (value.title) return formatValue(value.title, column);
         }
-        return formatValue(value, column, item);
+        return formatValue(value, column);
       }
       
       const nestedValue = getNestedValue(item, column.field);
-      if (nestedValue !== undefined) return formatValue(nestedValue, column, item);
+      if (nestedValue !== undefined) return formatValue(nestedValue, column);
 
       return '-';
       
-    } catch (error) {
+    } catch {
       return '-';
     }
   }, [formatValue, getNestedValue, resource]);
@@ -543,7 +577,7 @@ export default function DynamicTableManager({
       <div 
         ref={tableContainerRef}
         onScroll={handleTableScroll}
-        className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm"
+        className="overflow-x-auto rounded-lg shadow-sm"
       >
         <TableInformations
           headers={headers}
@@ -552,55 +586,55 @@ export default function DynamicTableManager({
           onSelectAll={(e) => handleSelectAll(e.target.checked)}
           allSelected={tableData.allSelected}
           hasActions={enableView || enableEdit}
+          columnWidths={columnWidths}
+          onMouseDownResize={handleMouseDownResize}
         >
           {items.map((item: any) => (
             <tr
               key={item.id}
-              className="bg-white hover:bg-gray-50 text-[#111111B2] text-center relative border-b border-gray-100 cursor-pointer h-[30px]"
+              className="bg-white hover:bg-gray-50 border-b border-gray-100 text-[#111111B2] cursor-pointer h-[26px]"
               onClick={() => onRowClick?.(item)}
             >
-              <td className="p-0 sticky left-0 z-20 bg-white border-b border-gray-100 h-[30px] w-auto align-top">
-                <div className="relative w-full h-[30px] group">
-                  <div className="absolute top-0 left-0 w-full min-h-[30px] h-full bg-white flex items-center px-2 gap-2 transition-all duration-100 group-hover:h-auto group-hover:min-h-fit group-hover:w-max group-hover:min-w-full group-hover:shadow-lg group-hover:z-50 group-hover:border group-hover:border-gray-200 overflow-hidden border-r border-gray-100">
-                    {enableDelete && (
-                      <input 
-                        type="checkbox" 
-                        className="inp-checkbox-select rounded border-gray-300 shrink-0" 
-                        value={item.id} 
-                        id={`item-${item.id}`}
-                        checked={selectedCheckboxes.includes(item.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleCheckboxChange(item.id);
-                        }}
-                      />
-                    )}
-                    <div className="truncate text-sm text-left max-w-[150px] group-hover:max-w-none group-hover:whitespace-normal">
-                      {getCellValue(item, dataColumns[0])}
-                    </div>
-                  </div>
-                </div>
-              </td>
-              
-              {dataColumns.slice(1).map((column) => (
-                <td key={column.field} className="p-0 border-b border-gray-100 h-[30px] relative align-top">
-                  <div className="relative w-full h-[30px] group">
-                    <div className={`absolute top-0 left-0 w-full min-h-[30px] h-full bg-white flex items-center px-2 transition-all duration-100 group-hover:h-auto group-hover:min-h-fit group-hover:w-max group-hover:min-w-full group-hover:max-w-[400px] group-hover:shadow-lg group-hover:z-50 group-hover:border group-hover:border-gray-200 overflow-hidden ${column.align === 'right' ? 'justify-end' : column.align === 'left' ? 'justify-start' : 'justify-center'}`}>
-                      <div className={`w-full truncate max-w-[150px] group-hover:max-w-none group-hover:whitespace-normal ${column.align === 'right' ? 'text-right' : column.align === 'left' ? 'text-left' : 'text-center'}`}>
-                        {getCellValue(item, column)}
+              {dataColumns.map((col, index) => {
+                const isFirst = index === 0;
+                const width = columnWidths[col.field] || 150;
+                return (
+                  <td 
+                    key={col.field} 
+                    className={`align-middle border-r border-gray-100 p-0 ${isFirst ? 'sticky left-0 bg-white z-20' : ''}`}
+                    style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                  >
+                    <div className={`flex w-full h-full min-h-[26px] items-center px-2 ${isFirst ? 'justify-start' : 'justify-center'}`}>
+                      {isFirst && enableDelete && (
+                        <div className="mr-2 flex shrink-0 items-center justify-center">
+                          <input 
+                            type="checkbox" 
+                            className="inp-checkbox-select rounded border-gray-300" 
+                            value={item.id} 
+                            checked={selectedCheckboxes.includes(item.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleCheckboxChange(item.id);
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div className={`truncate w-full text-[13px] ${isFirst || col.align === 'left' ? 'text-left' : col.align === 'right' ? 'text-right' : 'text-center'}`}>
+                        {getCellValue(item, col)}
                       </div>
                     </div>
-                  </div>
-                </td>
-              ))}
-              
+                  </td>
+                );
+              })}
+
               {(enableView || enableEdit) && (
-                <td className="px-2 sticky right-0 bg-white z-20 border-l border-gray-100 align-middle h-[30px]">
-                  <div className="flex items-center justify-center gap-2 h-full">
+                <td className="px-2 sticky right-0 bg-white z-20 border-l border-gray-100 align-middle w-[80px] min-w-[80px] max-w-[80px] p-0 h-[26px]">
+                  <div className="flex items-center justify-center gap-2 h-full min-h-[26px]">
                     {enableView && (
                       <Link 
                         href={`${basePath}/visualizar/${item.id}`} 
-                        title={`Visualizar`}
+                        title="Visualizar"
                         className="p-1 hover:bg-blue-50 rounded transition-colors text-[#8b5cf6]"
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -610,7 +644,7 @@ export default function DynamicTableManager({
                     {enableEdit && (
                       <Link 
                         href={`${basePath}/editar/${item.id}`} 
-                        title={`Editar`}
+                        title="Editar"
                         className="p-1 hover:bg-green-50 rounded transition-colors text-[#8b5cf6]"
                         onClick={(e) => e.stopPropagation()}
                       >

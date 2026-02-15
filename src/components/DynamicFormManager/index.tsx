@@ -93,10 +93,14 @@ export default function DynamicFormManager({
         if (firstElement) {
           firstElement.focus();
           
-          if (firstElement instanceof HTMLInputElement && (firstElement.type === 'text' || firstElement.type === 'email' || firstElement.type === 'number')) {
-            const valueLength = firstElement.value.length;
-            if (valueLength > 0) {
-              firstElement.setSelectionRange(valueLength, valueLength);
+          if (firstElement instanceof HTMLInputElement && (firstElement.type === 'text' || firstElement.type === 'password' || firstElement.type === 'tel')) {
+            try {
+              const valueLength = firstElement.value.length;
+              if (valueLength > 0) {
+                firstElement.setSelectionRange(valueLength, valueLength);
+              }
+            } catch (e) {
+              // Silently ignore selection range errors on unsupported types just in case
             }
           }
         }
@@ -361,11 +365,14 @@ export default function DynamicFormManager({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = async (fieldName: string, value: any) => {
+  const handleChange = (fieldName: string, rawValue: any) => {
     if (isViewMode) return;
     
-    const updatedValues = { ...formValues, [fieldName]: value };
-    setFormValues(updatedValues);
+    const parsedValue = rawValue !== undefined && rawValue !== null ? String(rawValue) : '';
+    
+    setFormValues(prev => ({ ...prev, [fieldName]: parsedValue }));
+
+    const updatedValues = { ...formValues, [fieldName]: parsedValue };
 
     if (onFormValuesChange) {
       onFormValuesChange(updatedValues);
@@ -379,28 +386,25 @@ export default function DynamicFormManager({
       });
     }
 
-    if (onFieldChange) {
-      try {
-        const result = await onFieldChange(fieldName, value);
-        
-        if (result && typeof result === 'object') {
-          const newUpdatedValues = { ...updatedValues, ...result };
-          setFormValues(newUpdatedValues);
-          
-          if (onFormValuesChange) {
-            onFormValuesChange(newUpdatedValues);
-          }
-        }
-      } catch (error) {
-        console.error('Erro no onFieldChange:', error);
-      }
-    }
-
     if (hasSteps && !externalCompletedSteps) {
       const isCurrentStepComplete = validateStep(currentStep, updatedValues);
       if (isCurrentStepComplete && !internalCompletedSteps.includes(currentStep)) {
         setInternalCompletedSteps(prev => [...prev, currentStep]);
       }
+    }
+
+    if (onFieldChange) {
+      Promise.resolve(onFieldChange(fieldName, parsedValue))
+        .then(result => {
+          if (result && typeof result === 'object') {
+            setFormValues(current => {
+              const newVals = { ...current, ...result };
+              if (onFormValuesChange) onFormValuesChange(newVals);
+              return newVals;
+            });
+          }
+        })
+        .catch(error => console.error('Erro no onFieldChange:', error));
     }
   };
 
@@ -534,7 +538,13 @@ export default function DynamicFormManager({
   };
 
   const renderField = (field: FormFieldDef, index: number) => {
-    const value = formValues[field.field] || '';
+    let value = formValues[field.field];
+    if (value === undefined || value === null) {
+      value = '';
+    } else if (['text', 'email', 'password', 'tel'].includes(field.type)) {
+      value = String(value);
+    }
+    
     const error = errors[field.field];
     const isDisabled = isViewMode || field.disabled || loading || submitting;
     const isReadOnly = isViewMode || field.readOnly;
@@ -560,7 +570,7 @@ export default function DynamicFormManager({
       tabIndex: field.tabIndex,
       autoFocus: field.autoFocus,
       svg: field.icon,
-      mask: field.mask,
+      mask: field.mask as any,
       maxLength: field.maxLength,
       showIncrementButtons: field.type === 'number' && field.showIncrementButtons,
       min: field.min,
@@ -582,6 +592,7 @@ export default function DynamicFormManager({
               {...commonProps}
               type={field.type}
             />
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
             {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
           </div>
         );
@@ -598,7 +609,8 @@ export default function DynamicFormManager({
         
         if (isPasswordField && otherField) {
           const confirmField = otherField;
-          const confirmValue = formValues[confirmField.field] || '';
+          let confirmValue = formValues[confirmField.field];
+          if (confirmValue === undefined || confirmValue === null) confirmValue = '';
           
           return (
             <div 
@@ -606,21 +618,22 @@ export default function DynamicFormManager({
               className={`flex flex-col md:flex-row gap-3 w-full ${field.className || ''}`}
               style={{ flexBasis: '100%' }}
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <Input
                   {...commonProps}
                   type="password"
                   password
                 />
-                {field.validation?.patternMessage && !error && (
-                  <p className="text-gray-500 text-xs mt-1 absolute">
+                {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
+                {field.validation?.patternMessage && !error && !(field as any).renderBottom && (
+                  <p className="text-gray-500 text-xs mt-1">
                     {field.validation.patternMessage}
                   </p>
                 )}
-                {error && <p className="text-red-500 text-sm mt-1 absolute">{error}</p>}
+                {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
               </div>
               
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <Input
                   id={confirmField.field}
                   label={confirmField.label}
@@ -629,11 +642,12 @@ export default function DynamicFormManager({
                   password
                   placeholder={confirmField.placeholder}
                   disabled={shouldDisable}
-                  value={confirmValue}
+                  value={String(confirmValue)}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
                     handleChange(confirmField.field, e.target.value)
                   }
                 />
+                {errors[confirmField.field] && <p className="text-red-500 text-sm mt-1">{errors[confirmField.field]}</p>}
               </div>
             </div>
           );
@@ -651,6 +665,8 @@ export default function DynamicFormManager({
               type="password"
               password
             />
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
+            {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
           </div>
         );
 
@@ -671,7 +687,9 @@ export default function DynamicFormManager({
               placeholder={field.placeholder || "Selecione..."}
               svg={field.icon}
               tabIndex={field.tabIndex}
+              searchable={(field as any).searchable}
             />
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
             {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
           </div>
         );
@@ -699,6 +717,7 @@ export default function DynamicFormManager({
               maxLength={field.maxLength}
               autoFocus={field.autoFocus} 
             />
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
           </div>
         );
 
@@ -723,6 +742,7 @@ export default function DynamicFormManager({
             <label htmlFor={field.field} className="ml-2 block text-sm text-gray-700">
               {field.label}
             </label>
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
           </div>
         );
 
@@ -747,6 +767,7 @@ export default function DynamicFormManager({
               maxFiles={field.maxFiles}
               isViewMode={isViewMode}
             />
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
           </div>
         );
 
@@ -762,6 +783,7 @@ export default function DynamicFormManager({
             <div className="mt-1">
               {field.render ? field.render(value, formValues, (newValue: any) => handleChange(field.field, newValue)) : null}
             </div>
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
           </div>
         );
 
@@ -775,6 +797,7 @@ export default function DynamicFormManager({
               {...commonProps}
               type="text"
             />
+            {(field as any).renderBottom && (field as any).renderBottom(value, formValues)}
             {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
           </div>
         );

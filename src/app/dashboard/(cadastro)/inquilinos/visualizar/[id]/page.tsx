@@ -34,6 +34,7 @@ export default function VisualizarInquilinoPage() {
       zip_code: address.zip_code || '',
       street: address.street || '',
       number: address.number || '',
+      complement: address.complement || '',
       district: address.district || '',
       city: address.city || '',
       state: address.state || '',
@@ -54,7 +55,7 @@ export default function VisualizarInquilinoPage() {
       fields: [
         {
           field: 'name',
-          label: 'Nome',
+          label: 'Nome/Razão Social',
           type: 'text',
           required: true,
           placeholder: 'Nome completo do inquilino',
@@ -131,6 +132,7 @@ export default function VisualizarInquilinoPage() {
         { field: 'zip_code', label: 'CEP', type: 'text', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
         { field: 'street', label: 'Rua', type: 'text', icon: <MapPinIcon size={20} />, className: 'col-span-full', readOnly: true },
         { field: 'number', label: 'Número', type: 'text', icon: <Hash size={20} />, readOnly: true },
+        { field: 'complement', label: 'Complemento', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
         { field: 'district', label: 'Bairro', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
         { field: 'city', label: 'Cidade', type: 'text', icon: <MapPinIcon size={20} />, readOnly: true },
         { field: 'state', label: 'Estado', type: 'text', icon: <Globe size={20} />, readOnly: true },

@@ -100,7 +100,6 @@ export default function DynamicFormManager({
                 firstElement.setSelectionRange(valueLength, valueLength);
               }
             } catch (e) {
-              // Silently ignore selection range errors on unsupported types just in case
             }
           }
         }

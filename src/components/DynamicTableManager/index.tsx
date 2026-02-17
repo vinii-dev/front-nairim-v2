@@ -55,7 +55,6 @@ export default function DynamicTableManager({
   const [appliedFilters, setAppliedFilters] = useState<Record<string, any>>({});
   const [showOwnerTypeModal, setShowOwnerTypeModal] = useState(false);
   
-  // Controle de largura das colunas
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   const router = useRouter();
@@ -92,21 +91,19 @@ export default function DynamicTableManager({
     return columns.filter(col => col.field !== "actions" && col.type !== "custom");
   }, [columns]);
 
-  // Define larguras padrão
   useEffect(() => {
     const initialWidths: Record<string, number> = {};
     dataColumns.forEach(col => {
       if (!columnWidths[col.field]) {
         initialWidths[col.field] = ['email', 'name', 'street', 'address'].includes(col.field) ? 220 : 150;
-        if (col.field === 'person_type') initialWidths[col.field] = 70; // Coluna pessoa fina
+        if (col.field === 'person_type') initialWidths[col.field] = 70;
       }
     });
     if (Object.keys(initialWidths).length > 0) {
       setColumnWidths(prev => ({ ...prev, ...initialWidths }));
     }
-  }, [dataColumns]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dataColumns]);
 
-  // Função e Refs para o Redimensionamento (Drag and Drop)
   const isResizingRef = useRef<{field: string, startX: number, startWidth: number} | null>(null);
 
   const handleMouseDownResize = useCallback((e: React.MouseEvent, field: string) => {
@@ -125,7 +122,7 @@ export default function DynamicTableManager({
     if (!isResizingRef.current) return;
     const { field, startX, startWidth } = isResizingRef.current;
     const diff = e.pageX - startX;
-    const newWidth = Math.max(60, startWidth + diff); // Largura mínima de 60px
+    const newWidth = Math.max(60, startWidth + diff);
     setColumnWidths(prev => ({ ...prev, [field]: newWidth }));
   }, []);
 
@@ -258,7 +255,8 @@ export default function DynamicTableManager({
       if (isProperty) {
         const addressFieldMap: Record<string, string> = {
           'zip_code': 'zip_code', 'state': 'state', 'city': 'city',
-          'district': 'district', 'street': 'street', 'address': 'street', 'cep': 'zip_code'
+          'district': 'district', 'street': 'street', 'address': 'street', 'cep': 'zip_code',
+          'complement': 'complement'
         };
         const addressField = addressFieldMap[column.field];
         if (addressField) return formatValue(item.addresses?.[0]?.address?.[addressField], column);
@@ -273,7 +271,8 @@ export default function DynamicTableManager({
         'district': { path: 'addresses[0].address', field: 'district' },
         'address': { path: 'addresses[0].address', field: 'street' },
         'street': { path: 'addresses[0].address', field: 'street' },
-        'cep': { path: 'addresses[0].address', field: 'zip_code' }
+        'cep': { path: 'addresses[0].address', field: 'zip_code' },
+        'complement': { path: 'addresses[0].address', field: 'complement' }
       };
 
       if (addressFieldMap[column.field]) {

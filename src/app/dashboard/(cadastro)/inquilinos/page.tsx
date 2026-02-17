@@ -92,6 +92,12 @@ export default function InquilinosPage() {
       sortParam: "street"
     },
     {
+      field: "complement",
+      label: "Complemento",
+      type: "text",
+      sortParam: "complement"
+    },
+    {
       field: "contact",
       label: "Contato",
       type: "text",

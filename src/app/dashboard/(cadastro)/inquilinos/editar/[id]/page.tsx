@@ -38,6 +38,7 @@ export default function EditarInquilinoPage() {
             showMessage('Endereço atualizado!', 'success');
             return {
               street: data.logradouro || '',
+              complement: data.complemento || '',
               district: data.bairro || '',
               city: data.localidade || '',
               state: data.uf || '',
@@ -65,6 +66,7 @@ export default function EditarInquilinoPage() {
             zip_code: data.zip_code?.replace(/\D/g, ''),
             street: data.street,
             number: data.number,
+            complement: data.complement || null,
             district: data.district,
             city: data.city,
             state: data.state,
@@ -142,6 +144,7 @@ export default function EditarInquilinoPage() {
       zip_code: address.zip_code || '',
       street: address.street || '',
       number: address.number || '',
+      complement: address.complement || '',
       district: address.district || '',
       city: address.city || '',
       state: address.state || '',
@@ -249,6 +252,7 @@ export default function EditarInquilinoPage() {
         { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
         { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
         { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
+        { field: 'complement', label: 'Complemento', type: 'text', required: false, placeholder: 'Apto 123, Bloco B', icon: <MapPinIcon size={20} /> },
         { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
         { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
         { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },

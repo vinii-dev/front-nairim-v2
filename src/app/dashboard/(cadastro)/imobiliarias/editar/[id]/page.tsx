@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useParams, useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
@@ -18,10 +18,28 @@ export default function EditarImobiliariaPageClient() {
   const { showMessage } = useMessageContext();
   const router = useRouter();
 
-  const handleFieldChange = async (fieldName: string, value: any) => {
+  // CORREÇÃO 1: Cache para evitar loop do CEP
+  const lastFetchedCep = useRef('');
+
+  // CORREÇÃO 2: useCallback e lógica de cache
+  const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
+      
+      // Se apagou, limpa o cache
+      if (cleanCEP.length < 8) {
+        lastFetchedCep.current = '';
+        return null;
+      }
+
       if (cleanCEP.length === 8) {
+        // Se já buscou este CEP, ignora
+        if (cleanCEP === lastFetchedCep.current) {
+            return null;
+        }
+
+        lastFetchedCep.current = cleanCEP;
+
         try {
           showMessage('Buscando CEP...', 'info');
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
@@ -47,9 +65,10 @@ export default function EditarImobiliariaPageClient() {
       }
     }
     return null;
-  };
+  }, [showMessage]);
 
-  const handleSubmit = async (data: any) => {
+  // CORREÇÃO 3: useCallback para evitar recriação
+  const handleSubmit = useCallback(async (data: any) => {
     try {
       const formattedData = {
         trade_name: data.trade_name,
@@ -99,12 +118,18 @@ export default function EditarImobiliariaPageClient() {
     } catch (error: any) {
       throw new Error(`Erro ao atualizar imobiliária: ${error.message}`);
     }
-  };
+  }, [id]);
 
-  const transformData = (apiData: any) => {
+  // CORREÇÃO 4: useCallback para evitar recarregamento dos dados iniciais
+  const transformData = useCallback((apiData: any) => {
     if (!apiData) return {};
     const address = apiData.addresses?.[0]?.address || {};
     
+    // Inicializa o cache com o CEP existente
+    if (address.zip_code && !lastFetchedCep.current) {
+        lastFetchedCep.current = address.zip_code.replace(/\D/g, '');
+    }
+
     return {
       trade_name: apiData.trade_name || '',
       legal_name: apiData.legal_name || '',
@@ -127,7 +152,7 @@ export default function EditarImobiliariaPageClient() {
         email: c.contact?.email || c.email || '',
       })) || []
     };
-  };
+  }, []);
 
   const steps: FormStep[] = useMemo(() => [
     {
@@ -221,10 +246,11 @@ export default function EditarImobiliariaPageClient() {
     },
   ], []);
 
-  const onSubmitSuccess = () => {
+  // CORREÇÃO 5: useCallback para sucesso
+  const onSubmitSuccess = useCallback(() => {
     showMessage('Imobiliária atualizada com sucesso!', 'success');
     router.push('/dashboard/imobiliarias');
-  };
+  }, [showMessage, router]);
 
   return (
     <DynamicFormManager

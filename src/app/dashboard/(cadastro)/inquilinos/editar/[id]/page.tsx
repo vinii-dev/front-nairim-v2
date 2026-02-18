@@ -2,7 +2,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
@@ -22,15 +22,36 @@ export default function EditarInquilinoPage() {
   const { showMessage } = useMessageContext();
   const router = useRouter();
 
-  const handleFieldChange = async (fieldName: string, value: any) => {
+  // CORREÇÃO 1: Cache para o CEP
+  const lastFetchedCep = useRef('');
+
+  // CORREÇÃO 2: useCallback e lógica de cache
+  const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
+      
+      // Se apagou, limpa o cache para permitir nova busca futura
+      if (cleanCEP.length < 8) {
+        lastFetchedCep.current = '';
+        return null;
+      }
+
       if (cleanCEP.length === 8) {
+        // Se é o mesmo CEP já buscado, para aqui (evita loop)
+        if (cleanCEP === lastFetchedCep.current) {
+            return null;
+        }
+
+        lastFetchedCep.current = cleanCEP;
+
         try {
           showMessage('Buscando CEP...', 'info');
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
+          
           if (!response.ok) throw new Error(`Erro ${response.status}`);
+          
           const data = await response.json();
+          
           if (data.error) {
             showMessage(data.error, 'error');
             return null;
@@ -52,9 +73,10 @@ export default function EditarInquilinoPage() {
       }
     }
     return null;
-  };
+  }, [showMessage]);
 
-  const handleSubmit = async (data: any) => {
+  // CORREÇÃO 3: useCallback para evitar recriação no render
+  const handleSubmit = useCallback(async (data: any) => {
     try {
       const tipo = data.tenant_type || (data.cpf ? 'fisica' : 'juridica');
       
@@ -125,12 +147,18 @@ export default function EditarInquilinoPage() {
     } catch (error: any) {
       throw new Error(error.message);
     }
-  };
+  }, [id]);
 
-  const transformData = (apiData: any) => {
+  // CORREÇÃO 4: useCallback para evitar recarregamento dos dados iniciais
+  const transformData = useCallback((apiData: any) => {
     if (!apiData) return {};
     const address = apiData.addresses?.[0]?.address || {};
     
+    // Inicializa o cache com o CEP do banco de dados para evitar re-fetch imediato
+    if (address.zip_code && !lastFetchedCep.current) {
+        lastFetchedCep.current = address.zip_code.replace(/\D/g, '');
+    }
+
     return {
       tenant_type: apiData.cpf ? 'fisica' : 'juridica',
       name: apiData.name || '',
@@ -156,7 +184,7 @@ export default function EditarInquilinoPage() {
         email: c.contact?.email || c.email || '',
       })) || []
     };
-  };
+  }, []);
 
   const steps: FormStep[] = useMemo(() => [
     {
@@ -280,10 +308,11 @@ export default function EditarInquilinoPage() {
     },
   ], []);
 
-  const onSubmitSuccess = () => {
+  // CORREÇÃO 5: useCallback para o sucesso
+  const onSubmitSuccess = useCallback(() => {
     showMessage('Inquilino atualizado com sucesso!', 'success');
     router.push('/dashboard/inquilinos');
-  };
+  }, [showMessage, router]);
 
   return (
     <DynamicFormManager

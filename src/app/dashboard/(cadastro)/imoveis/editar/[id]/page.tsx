@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import DynamicFormManager from '@/components/DynamicFormManager';
 import { FormStep } from '@/types/types';
@@ -65,22 +65,6 @@ const formatMetricValue = (value: number | string) => {
   });
 };
 
-const isDocumentItem = (item: any): boolean => {
-  return item && 
-    typeof item === 'object' && 
-    'file_name' in item && 
-    'file_url' in item &&
-    !isFileInstance(item);
-};
-
-const isFileInstance = (item: any): item is File => {
-  return item && 
-    typeof item === 'object' && 
-    'name' in item && 
-    'size' in item && 
-    'type' in item;
-};
-
 export default function EditarImovelPage() {
   const params = useParams();
   const id = params.id as string;
@@ -96,6 +80,9 @@ export default function EditarImovelPage() {
   const [propertyData, setPropertyData] = useState<any>(null);
   const [loadingProperty, setLoadingProperty] = useState(true);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+
+  // CORREÇÃO 1: Cache do CEP
+  const lastFetchedCep = useRef('');
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -165,11 +152,30 @@ export default function EditarImovelPage() {
     fetchPropertyData();
   }, [id, router, showMessage]);
 
-  const handleFieldChange = async (fieldName: string, value: any) => {
+  // CORREÇÃO 2: useCallback e lógica de cache do CEP
+  const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
       
+      if (cleanCEP.length < 8) {
+        lastFetchedCep.current = '';
+        return {
+            street: '',
+            district: '',
+            city: '',
+            state: '',
+            country: 'Brasil',
+        };
+      }
+
       if (cleanCEP.length === 8) {
+        // Se já buscou este CEP, ignora para evitar loop
+        if (cleanCEP === lastFetchedCep.current) {
+            return null;
+        }
+
+        lastFetchedCep.current = cleanCEP;
+
         try {
           showMessage('Buscando CEP...', 'info');
           
@@ -206,20 +212,13 @@ export default function EditarImovelPage() {
           showMessage(error.message || 'Erro ao buscar CEP. Tente novamente.', 'error');
           return null;
         }
-      } else if (cleanCEP.length < 8) {
-        return {
-          street: '',
-          district: '',
-          city: '',
-          state: '',
-          country: 'Brasil',
-        };
       }
     }
     return null;
-  };
+  }, [showMessage]);
 
-  const transformData = (apiResponse: any) => {
+  // CORREÇÃO 3: useCallback para evitar recarregamento
+  const transformData = useCallback((apiResponse: any) => {
     const data = apiResponse.data || apiResponse;
     
     if (!data) {
@@ -228,6 +227,11 @@ export default function EditarImovelPage() {
     
     const address = data.addresses?.[0]?.address || {};
     const values = data.values?.[0] || {};
+
+    // Inicializa o cache com o CEP atual
+    if (address.zip_code && !lastFetchedCep.current) {
+        lastFetchedCep.current = address.zip_code.replace(/\D/g, '');
+    }
 
     const extractFileName = (filePath: string) => {
       if (!filePath) return 'Arquivo';
@@ -329,7 +333,7 @@ export default function EditarImovelPage() {
     };
 
     return transformed;
-  };
+  }, []);
 
   const steps: FormStep[] = useMemo(() => [
     {
@@ -741,7 +745,8 @@ export default function EditarImovelPage() {
     },
   ], [owners, propertyTypes, agencies, loadingData]);
 
-  const handleSubmit = async (data: any) => {
+  // CORREÇÃO 4: useCallback no submit
+  const handleSubmit = useCallback(async (data: any) => {
     try {
       const formData = new FormData();
       
@@ -897,24 +902,24 @@ export default function EditarImovelPage() {
     } catch (error: any) {
       throw new Error(`Erro ao atualizar imóvel: ${error.message}`);
     }
-  };
+  }, [user, id, propertyData]);
 
-  const onSubmitSuccess = (_data: any) => {
+  // CORREÇÃO 5: useCallback para funções de callback
+  const onSubmitSuccess = useCallback((_data: any) => {
     showMessage('Imóvel atualizado com sucesso!', 'success');
     router.push('/dashboard/imoveis');
-  };
+  }, [showMessage, router]);
 
-  const handleStepComplete = (stepIndex: number) => {
+  const handleStepComplete = useCallback((stepIndex: number) => {
     if (!completedSteps.includes(stepIndex)) {
       setCompletedSteps(prev => [...prev, stepIndex]);
     }
-  };
+  }, [completedSteps]);
 
-  const canNavigateToStep = (targetStep: number, currentStep: number, data: any): boolean => {
+  const canNavigateToStep = useCallback((targetStep: number, currentStep: number, data: any): boolean => {
     if (targetStep < currentStep) return true;
-    
     return true;
-  };
+  }, []);
 
   if (loadingData || loadingProperty) {
     return (

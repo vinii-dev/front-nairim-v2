@@ -2,7 +2,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
@@ -21,12 +21,26 @@ export default function EditarProprietarioPage() {
   
   const { showMessage } = useMessageContext();
   const router = useRouter();
+  
+  const lastFetchedCep = useRef('');
 
-  const handleFieldChange = async (fieldName: string, value: any) => {
+  // 1. Uso do useCallback para evitar recriação da função e recarregamento dos dados
+  const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
       
+      if (cleanCEP.length < 8) {
+        lastFetchedCep.current = '';
+        return null;
+      }
+
       if (cleanCEP.length === 8) {
+        if (cleanCEP === lastFetchedCep.current) {
+          return null;
+        }
+
+        lastFetchedCep.current = cleanCEP;
+
         try {
           showMessage('Buscando CEP...', 'info');
           const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
@@ -57,9 +71,10 @@ export default function EditarProprietarioPage() {
       }
     }
     return null;
-  };
+  }, [showMessage]);
 
-  const handleSubmit = async (data: any) => {
+  // 2. Uso do useCallback para evitar recriação
+  const handleSubmit = useCallback(async (data: any) => {
     try {
       const tipo = data.owner_type || (data.cpf ? 'fisica' : 'juridica');
       
@@ -126,13 +141,20 @@ export default function EditarProprietarioPage() {
     } catch (error: any) {
       throw new Error(error.message);
     }
-  };
+  }, [id]);
 
-  const transformData = (apiData: any) => {
+  // 3. CRUCIAL: Uso do useCallback no transformData. 
+  // Se essa função mudar, o DynamicFormManager recarrega os dados do zero.
+  const transformData = useCallback((apiData: any) => {
     if (!apiData) return {};
     
     const address = apiData.addresses?.[0]?.address || {};
     
+    // Atualiza o cache apenas se ainda estiver vazio, para não interferir na edição
+    if (address.zip_code && !lastFetchedCep.current) {
+        lastFetchedCep.current = address.zip_code.replace(/\D/g, '');
+    }
+
     return {
       owner_type: apiData.cpf ? 'fisica' : 'juridica',
       name: apiData.name || '',
@@ -158,7 +180,7 @@ export default function EditarProprietarioPage() {
         email: c.contact?.email || c.email || '',
       })) || []
     };
-  };
+  }, []); // Array de dependências vazio pois não usa props externas que mudam
 
   const steps: FormStep[] = useMemo(() => [
     {
@@ -287,10 +309,10 @@ export default function EditarProprietarioPage() {
     },
   ], []);
 
-  const onSubmitSuccess = (data: any) => {
+  const onSubmitSuccess = useCallback((data: any) => {
     showMessage('Proprietário atualizado com sucesso!', 'success');
     router.push('/dashboard/proprietarios');
-  };
+  }, [showMessage, router]);
 
   return (
     <DynamicFormManager

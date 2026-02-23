@@ -2,7 +2,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback, useState } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
@@ -23,6 +23,9 @@ export default function EditarProprietarioPage() {
   const router = useRouter();
   
   const lastFetchedCep = useRef('');
+  
+  // NOVO: Estado para controle de preenchimento manual no modo edição
+  const [isManualAddress, setIsManualAddress] = useState(false);
 
   // 1. Uso do useCallback para evitar recriação da função e recarregamento dos dados
   const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
@@ -43,29 +46,39 @@ export default function EditarProprietarioPage() {
 
         try {
           showMessage('Buscando CEP...', 'info');
-          const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
+          // CORRIGIDO: Fetch para a rota certa
+          const response = await fetch(`/api/cep/${cleanCEP}`);
           
-          if (!response.ok) throw new Error('Erro ao buscar CEP');
+          if (!response.ok) {
+            // FALLBACK 
+            if (response.status === 404) {
+              setIsManualAddress(true);
+              showMessage('CEP não encontrado. Os campos de endereço foram liberados para preenchimento manual.', 'error');
+              return { street: '', district: '', city: '', state: '' };
+            }
+            throw new Error('Erro ao buscar CEP');
+          }
 
           const data = await response.json();
           
-          if (data.error) {
-            showMessage(data.error, 'error');
-            return null;
+          if (data.error || data.erro) {
+            throw new Error(data.error || 'CEP não encontrado.');
           } else {
+            setIsManualAddress(false);
             showMessage('Endereço preenchido automaticamente!', 'success');
+            // CORRIGIDO: Normalização de dados
             return {
-              street: data.logradouro || '',
-              complement: data.complemento || '',
+              street: data.rua || '',
               district: data.bairro || '',
-              city: data.localidade || '',
-              state: data.uf || '',
+              city: data.cidade || '',
+              state: data.estado || '',
               country: data.pais || 'Brasil',
             };
           }
         } catch (error: any) {
           console.error('Erro ao buscar CEP:', error);
           showMessage(error.message || 'Erro ao buscar CEP.', 'error');
+          setIsManualAddress(true);
           return null;
         }
       }
@@ -279,13 +292,14 @@ export default function EditarProprietarioPage() {
       icon: <MapPin size={20} />,
       fields: [
         { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', className: 'col-span-full' },
-        { field: 'street', label: 'Rua', type: 'text', required: true, disabled: true, readOnly: true, className: 'col-span-full' },
+        // NOVO: Propriedades disabled e readOnly dinâmicas
+        { field: 'street', label: 'Rua', type: 'text', required: true, disabled: !isManualAddress, readOnly: !isManualAddress, className: 'col-span-full' },
         { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
         { field: 'complement', label: 'Complemento', type: 'text', required: false, placeholder: 'Apto 123, Bloco B', icon: <MapPinIcon size={20} /> },
-        { field: 'district', label: 'Bairro', type: 'text', required: true, disabled: true, readOnly: true },
-        { field: 'city', label: 'Cidade', type: 'text', required: true, disabled: true, readOnly: true },
-        { field: 'state', label: 'Estado', type: 'text', required: true, disabled: true, readOnly: true, icon: <Globe size={20} /> },
-        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', disabled: true, readOnly: true, icon: <Globe size={20} /> }
+        { field: 'district', label: 'Bairro', type: 'text', required: true, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'city', label: 'Cidade', type: 'text', required: true, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'state', label: 'Estado', type: 'text', required: true, disabled: !isManualAddress, readOnly: !isManualAddress, icon: <Globe size={20} /> },
+        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', disabled: !isManualAddress, readOnly: !isManualAddress, icon: <Globe size={20} /> }
       ],
     },
     {
@@ -307,7 +321,7 @@ export default function EditarProprietarioPage() {
         }
       ],
     },
-  ], []);
+  ], [isManualAddress]); // Dependência atualizada
 
   const onSubmitSuccess = useCallback((data: any) => {
     showMessage('Proprietário atualizado com sucesso!', 'success');

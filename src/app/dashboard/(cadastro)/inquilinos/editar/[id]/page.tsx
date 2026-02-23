@@ -2,12 +2,12 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback, useState } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
 import ContactManager from '@/components/ContactManager';
-import { FormStep } from '@/types/types';
+import { FormStep } from '@/types/types'
 import {
   User, MapPin, Phone, FileText, Hash,
   Briefcase, Heart, User as UserIcon,
@@ -22,10 +22,12 @@ export default function EditarInquilinoPage() {
   const { showMessage } = useMessageContext();
   const router = useRouter();
 
-  // CORREÇÃO 1: Cache para o CEP
+  // Cache para o CEP
   const lastFetchedCep = useRef('');
+  
+  // NOVO: Estado para controlar se o usuário precisa preencher manualmente
+  const [isManualAddress, setIsManualAddress] = useState(false);
 
-  // CORREÇÃO 2: useCallback e lógica de cache
   const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
@@ -46,9 +48,18 @@ export default function EditarInquilinoPage() {
 
         try {
           showMessage('Buscando CEP...', 'info');
-          const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
+          // CORRIGIDO: URL para bater com a rota da API
+          const response = await fetch(`/api/cep/${cleanCEP}`);
           
-          if (!response.ok) throw new Error(`Erro ${response.status}`);
+          if (!response.ok) {
+            if (response.status === 404) {
+              // FALLBACK: Libera os campos
+              setIsManualAddress(true);
+              showMessage('CEP não encontrado. Os campos foram liberados para preenchimento manual.', 'error');
+              return { street: '', district: '', city: '', state: '' };
+            }
+            throw new Error(`Erro ${response.status}`);
+          }
           
           const data = await response.json();
           
@@ -56,18 +67,20 @@ export default function EditarInquilinoPage() {
             showMessage(data.error, 'error');
             return null;
           } else {
+            setIsManualAddress(false);
             showMessage('Endereço atualizado!', 'success');
+            // CORRIGIDO: Mapeamento dos campos da CepNormalizado
             return {
-              street: data.logradouro || '',
-              complement: data.complemento || '',
+              street: data.rua || '',
               district: data.bairro || '',
-              city: data.localidade || '',
-              state: data.uf || '',
-              country: data.pais || 'Brasil',
+              city: data.cidade || '',
+              state: data.estado || '',
+              country: 'Brasil',
             };
           }
         } catch (error: any) {
           showMessage(error.message || 'Erro ao buscar CEP.', 'error');
+          setIsManualAddress(true); // Libera os campos em caso de falha de rede também
           return null;
         }
       }
@@ -75,7 +88,6 @@ export default function EditarInquilinoPage() {
     return null;
   }, [showMessage]);
 
-  // CORREÇÃO 3: useCallback para evitar recriação no render
   const handleSubmit = useCallback(async (data: any) => {
     try {
       const tipo = data.tenant_type || (data.cpf ? 'fisica' : 'juridica');
@@ -149,7 +161,6 @@ export default function EditarInquilinoPage() {
     }
   }, [id]);
 
-  // CORREÇÃO 4: useCallback para evitar recarregamento dos dados iniciais
   const transformData = useCallback((apiData: any) => {
     if (!apiData) return {};
     const address = apiData.addresses?.[0]?.address || {};
@@ -191,42 +202,12 @@ export default function EditarInquilinoPage() {
       title: 'Dados do Inquilino',
       icon: <User size={20} />,
       fields: [
+        { field: 'tenant_type', label: '', type: 'text', hidden: true },
+        { field: 'name', label: 'Nome/Razão Social', type: 'text', required: true, placeholder: 'Nome', icon: <UserIcon size={20} />, className: 'col-span-full' },
+        { field: 'internal_code', label: 'Código Interno', type: 'text', required: true, icon: <Hash size={20} /> },
+        { field: 'occupation', label: 'Profissão', type: 'text', required: true, icon: <Briefcase size={20} />, className: 'col-span-full', hidden: (formValues: any) => formValues.tenant_type === 'juridica' },
         {
-          field: 'tenant_type',
-          label: '',
-          type: 'text',
-          hidden: true,
-        },
-        {
-          field: 'name',
-          label: 'Nome/Razão Social',
-          type: 'text',
-          required: true,
-          placeholder: 'Nome',
-          icon: <UserIcon size={20} />,
-          className: 'col-span-full',
-        },
-        {
-          field: 'internal_code',
-          label: 'Código Interno',
-          type: 'text',
-          required: true,
-          icon: <Hash size={20} />,
-        },
-        {
-          field: 'occupation',
-          label: 'Profissão',
-          type: 'text',
-          required: true,
-          icon: <Briefcase size={20} />,
-          className: 'col-span-full',
-          hidden: (formValues: any) => formValues.tenant_type === 'juridica',
-        },
-        {
-          field: 'marital_status',
-          label: 'Estado Civil',
-          type: 'select',
-          required: true,
+          field: 'marital_status', label: 'Estado Civil', type: 'select', required: true,
           options: [
             { value: 'Solteiro(a)', label: 'Solteiro(a)' },
             { value: 'Casado(a)', label: 'Casado(a)' },
@@ -234,43 +215,12 @@ export default function EditarInquilinoPage() {
             { value: 'Divorciado(a)', label: 'Divorciado(a)' },
             { value: 'Viúvo(a)', label: 'Viúvo(a)' }
           ],
-          icon: <Heart size={20} />,
-          hidden: (formValues: any) => formValues.tenant_type === 'juridica',
+          icon: <Heart size={20} />, hidden: (formValues: any) => formValues.tenant_type === 'juridica'
         },
-        {
-          field: 'cpf',
-          label: 'CPF',
-          type: 'text',
-          required: true,
-          mask: 'cpf',
-          icon: <FileText size={20} />,
-          hidden: (formValues: any) => formValues.tenant_type === 'juridica',
-        },
-        {
-          field: 'cnpj',
-          label: 'CNPJ',
-          type: 'text',
-          required: true,
-          mask: 'cnpj',
-          icon: <FileText size={20} />,
-          hidden: (formValues: any) => formValues.tenant_type === 'fisica',
-        },
-        {
-          field: 'state_registration',
-          label: 'Inscrição Estadual',
-          type: 'text',
-          required: false,
-          icon: <BuildingIcon size={20} />,
-          hidden: (formValues: any) => formValues.tenant_type === 'fisica',
-        },
-        {
-          field: 'municipal_registration',
-          label: 'Inscrição Municipal',
-          type: 'text',
-          required: false,
-          icon: <BuildingIcon size={20} />,
-          hidden: (formValues: any) => formValues.tenant_type === 'fisica',
-        },
+        { field: 'cpf', label: 'CPF', type: 'text', required: true, mask: 'cpf', icon: <FileText size={20} />, hidden: (formValues: any) => formValues.tenant_type === 'juridica' },
+        { field: 'cnpj', label: 'CNPJ', type: 'text', required: true, mask: 'cnpj', icon: <FileText size={20} />, hidden: (formValues: any) => formValues.tenant_type === 'fisica' },
+        { field: 'state_registration', label: 'Inscrição Estadual', type: 'text', required: false, icon: <BuildingIcon size={20} />, hidden: (formValues: any) => formValues.tenant_type === 'fisica' },
+        { field: 'municipal_registration', label: 'Inscrição Municipal', type: 'text', required: false, icon: <BuildingIcon size={20} />, hidden: (formValues: any) => formValues.tenant_type === 'fisica' },
       ],
     },
     {
@@ -278,13 +228,14 @@ export default function EditarInquilinoPage() {
       icon: <MapPin size={20} />,
       fields: [
         { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
-        { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+        // NOVO: As propriedades readOnly e disabled dinâmicas
+        { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress, className: 'col-span-full' },
         { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
         { field: 'complement', label: 'Complemento', type: 'text', required: false, placeholder: 'Apto 123, Bloco B', icon: <MapPinIcon size={20} /> },
-        { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-        { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-        { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },
-        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
+        { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress }
       ],
     },
     {
@@ -306,9 +257,8 @@ export default function EditarInquilinoPage() {
         }
       ],
     },
-  ], []);
+  ], [isManualAddress]); // Dependência isManualAddress adicionada
 
-  // CORREÇÃO 5: useCallback para o sucesso
   const onSubmitSuccess = useCallback(() => {
     showMessage('Inquilino atualizado com sucesso!', 'success');
     router.push('/dashboard/inquilinos');

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useRef, useCallback, useState } from 'react';
 import { useMessageContext } from '@/contexts/MessageContext';
 import { useParams, useRouter } from 'next/navigation';
 import DynamicFormManager from '@/components/DynamicFormManager';
@@ -18,10 +18,11 @@ export default function EditarImobiliariaPageClient() {
   const { showMessage } = useMessageContext();
   const router = useRouter();
 
-  // CORREÇÃO 1: Cache para evitar loop do CEP
   const lastFetchedCep = useRef('');
+  
+  // NOVO: Estado para controle de preenchimento manual no modo edição
+  const [isManualAddress, setIsManualAddress] = useState(false);
 
-  // CORREÇÃO 2: useCallback e lógica de cache
   const handleFieldChange = useCallback(async (fieldName: string, value: any) => {
     if (fieldName === 'zip_code' && value) {
       const cleanCEP = value.replace(/\D/g, '');
@@ -42,24 +43,39 @@ export default function EditarImobiliariaPageClient() {
 
         try {
           showMessage('Buscando CEP...', 'info');
-          const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
-          if (!response.ok) throw new Error(`Erro ${response.status}`);
+          // CORRIGIDO: Fetch para a rota certa
+          const response = await fetch(`/api/cep/${cleanCEP}`);
+          
+          if (!response.ok) {
+            // FALLBACK 
+            if (response.status === 404) {
+              setIsManualAddress(true);
+              showMessage('CEP não encontrado. Os campos de endereço foram liberados para preenchimento manual.', 'error');
+              return { street: '', district: '', city: '', state: '' };
+            }
+            throw new Error(`Erro ${response.status}`);
+          }
+          
           const data = await response.json();
-          if (data.error) {
-            showMessage(data.error, 'error');
-            return null;
+          
+          if (data.error || data.erro) {
+            throw new Error(data.error || 'CEP não encontrado.');
           } else {
+            setIsManualAddress(false);
             showMessage('Endereço preenchido automaticamente!', 'success');
+            // CORRIGIDO: Normalização de dados
             return {
-              street: data.logradouro || '',
+              street: data.rua || '',
               district: data.bairro || '',
-              city: data.localidade || '',
-              state: data.uf || '',
+              city: data.cidade || '',
+              state: data.estado || '',
               country: data.pais || 'Brasil',
+              complement: data.complemento || '',
             };
           }
         } catch (error: any) {
           showMessage(error.message || 'Erro ao buscar CEP.', 'error');
+          setIsManualAddress(true);
           return null;
         }
       }
@@ -67,7 +83,6 @@ export default function EditarImobiliariaPageClient() {
     return null;
   }, [showMessage]);
 
-  // CORREÇÃO 3: useCallback para evitar recriação
   const handleSubmit = useCallback(async (data: any) => {
     try {
       const formattedData = {
@@ -120,7 +135,6 @@ export default function EditarImobiliariaPageClient() {
     }
   }, [id]);
 
-  // CORREÇÃO 4: useCallback para evitar recarregamento dos dados iniciais
   const transformData = useCallback((apiData: any) => {
     if (!apiData) return {};
     const address = apiData.addresses?.[0]?.address || {};
@@ -216,13 +230,14 @@ export default function EditarImobiliariaPageClient() {
       icon: <MapPin size={20} />,
       fields: [
         { field: 'zip_code', label: 'CEP', type: 'text', required: true, mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
-        { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+        // NOVO: Propriedades disabled e readOnly dinâmicas
+        { field: 'street', label: 'Rua', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress, className: 'col-span-full' },
         { field: 'number', label: 'Número', type: 'text', required: true, icon: <Hash size={20} /> },
         { field: 'complement', label: 'Complemento', type: 'text', icon: <Hash size={20} /> },
-        { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-        { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-        { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: true, readOnly: true },
-        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
+        { field: 'district', label: 'Bairro', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'city', label: 'Cidade', type: 'text', required: true, icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'state', label: 'Estado', type: 'text', required: true, icon: <Globe size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+        { field: 'country', label: 'País', type: 'text', required: true, defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress }
       ],
     },
     {
@@ -244,9 +259,8 @@ export default function EditarImobiliariaPageClient() {
         }
       ],
     },
-  ], []);
+  ], [isManualAddress]); // Dependência atualizada
 
-  // CORREÇÃO 5: useCallback para sucesso
   const onSubmitSuccess = useCallback(() => {
     showMessage('Imobiliária atualizada com sucesso!', 'success');
     router.push('/dashboard/imobiliarias');

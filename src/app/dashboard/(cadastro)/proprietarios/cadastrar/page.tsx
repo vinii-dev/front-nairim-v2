@@ -28,6 +28,9 @@ export default function CadastrarProprietarioPage({ searchParams }: Props) {
   
   const tipoParam = params.tipo;
   const [tipoSelecionado, setTipoSelecionado] = useState<OwnerType | null>(null);
+  
+  // NOVO: Estado para controle de fallback do endereço
+  const [isManualAddress, setIsManualAddress] = useState(false);
 
   useEffect(() => {
     if (!tipoParam || !['fisica', 'juridica'].includes(tipoParam)) {
@@ -47,32 +50,42 @@ export default function CadastrarProprietarioPage({ searchParams }: Props) {
         try {
           showMessage('Buscando CEP...', 'info');
           
-          const response = await fetch(`/api/cep?cep=${cleanCEP}&country=BR`);
+          // CORRIGIDO: URL para o padrão da API Next.js e fetch
+          const response = await fetch(`/api/cep/${cleanCEP}`);
           
           if (!response.ok) {
+            // FALLBACK: Libera os campos caso dê erro 404
+            if (response.status === 404) {
+              setIsManualAddress(true);
+              showMessage('CEP não encontrado. Os campos de endereço foram liberados para preenchimento manual.', 'error');
+              return { street: '', district: '', city: '', state: '' };
+            }
             throw new Error('Erro ao buscar CEP');
           }
 
           const data = await response.json();
           
-          if (data.error) {
-            showMessage(data.error, 'error');
-            return null;
+          if (data.error || data.erro) {
+            throw new Error(data.error || 'CEP não encontrado.');
           } else {
+            // SUCESSO: Bloqueia e preenche
+            setIsManualAddress(false);
             showMessage('Endereço preenchido automaticamente!', 'success');
             
+            // CORRIGIDO: Mapeamento para sua interface CepNormalizado
             return {
-              street: data.logradouro || '',
+              street: data.rua || '',
               complement: data.complemento || '',
               district: data.bairro || '',
-              city: data.localidade || '',
-              state: data.uf || '',
+              city: data.cidade || '',
+              state: data.estado || '',
               country: data.pais || 'Brasil',
             };
           }
         } catch (error: any) {
           console.error('Erro ao buscar CEP:', error);
-          showMessage('Erro ao buscar CEP. Tente novamente.', 'error');
+          showMessage('Erro ao buscar CEP. Preencha manualmente.', 'error');
+          setIsManualAddress(true); // Fallback em caso de erro de rede
           return null;
         }
       }
@@ -210,13 +223,14 @@ export default function CadastrarProprietarioPage({ searchParams }: Props) {
         icon: <MapPin size={20} />,
         fields: [
           { field: 'zip_code', label: 'CEP', type: 'text', required: true, placeholder: '00000-000', mask: 'cep', icon: <MapPinIcon size={20} />, className: 'col-span-full' },
-          { field: 'street', label: 'Rua', type: 'text', required: true, placeholder: 'Rua das Flores', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true, className: 'col-span-full' },
+          // NOVO: As propriedades disabled e readOnly agora dependem de isManualAddress
+          { field: 'street', label: 'Rua', type: 'text', required: true, placeholder: 'Rua das Flores', icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress, className: 'col-span-full' },
           { field: 'number', label: 'Número', type: 'text', required: true, placeholder: '123', icon: <Hash size={20} /> },
           { field: 'complement', label: 'Complemento', type: 'text', required: false, placeholder: 'Apto 123, Bloco B', icon: <MapPinIcon size={20} /> },
-          { field: 'district', label: 'Bairro', type: 'text', required: true, placeholder: 'Centro', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-          { field: 'city', label: 'Cidade', type: 'text', required: true, placeholder: 'São Paulo', icon: <MapPinIcon size={20} />, disabled: true, readOnly: true },
-          { field: 'state', label: 'Estado', type: 'text', required: true, placeholder: 'SP', icon: <Globe size={20} />, disabled: true, readOnly: true },
-          { field: 'country', label: 'País', type: 'text', required: true, placeholder: 'Brasil', defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: true, readOnly: true }
+          { field: 'district', label: 'Bairro', type: 'text', required: true, placeholder: 'Centro', icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+          { field: 'city', label: 'Cidade', type: 'text', required: true, placeholder: 'São Paulo', icon: <MapPinIcon size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+          { field: 'state', label: 'Estado', type: 'text', required: true, placeholder: 'SP', icon: <Globe size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress },
+          { field: 'country', label: 'País', type: 'text', required: true, placeholder: 'Brasil', defaultValue: 'Brasil', icon: <Globe size={20} />, disabled: !isManualAddress, readOnly: !isManualAddress }
         ],
       },
       {
@@ -242,7 +256,7 @@ export default function CadastrarProprietarioPage({ searchParams }: Props) {
     ];
 
     return baseSteps;
-  }, [tipoSelecionado]);
+  }, [tipoSelecionado, isManualAddress]); // Dependência adicionada
 
   const onSubmitSuccess = (data: any) => {
     showMessage('Proprietário criado com sucesso!', 'success');

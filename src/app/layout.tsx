@@ -18,7 +18,11 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "Nairim Holding",
   description: "Empresa especializada na venda de imóveis, oferecendo soluções completas para quem deseja adquirir casas, apartamentos, terrenos e propriedades comerciais. Nosso compromisso é conectar clientes a empreendimentos de alto padrão, garantindo segurança, transparência e excelência em cada negociação.",
-  icons: "/favicon.svg"
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({
